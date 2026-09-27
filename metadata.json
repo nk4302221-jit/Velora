@@ -1,0 +1,10 @@
+{
+  "name": "Velora",
+  "description": "A modern, full-stack e-commerce platform featuring secure authentication, social logins, integrated payments, and dynamic membership management.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
