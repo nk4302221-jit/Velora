@@ -1,20 +1,53 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# Velora — E-Commerce Platform
 
-# Run and deploy your vs code  app
+Velora is a full-stack e-commerce application designed to provide a complete online shopping experience with authentication, product browsing, cart, wishlist, checkout, orders, payments, and admin functionality.
 
-This contains everything you need to run your app locally.
+---
 
-View your app in vs code: https://vs/apps/7b2f912f-362c-4618-a2bb-f436831ff2c4
+## 🚀 Project Overview
 
-## Run Locally
+Velora is built using a modern full-stack architecture:
 
-**Prerequisites:**  Node.js
+- React.js
+- Vite
+- Node.js
+- Express.js
+- REST API
+- SQL / SQLite database
+- Google OAuth
+- Email / OTP authentication
+- Razorpay Payment Gateway
+- Vercel
+- Railway
 
+The project contains separate frontend and backend applications.
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+---
+
+## 📁 Project Structure
+
+```text
+Velora/
+│
+├── frontend/
+│   ├── src/
+│   ├── public/
+│   ├── package.json
+│   └── vite.config.js
+│
+├── backend/
+│   ├── app.js
+│   ├── server.js
+│   ├── config/
+│   ├── controllers/
+│   ├── routes/
+│   ├── services/
+│   ├── middleware/
+│   ├── jobs/
+│   ├── data/
+│   ├── package.json
+│   └── .env
+│
+├── package.json
+├── bun.lock
+└── README.md
