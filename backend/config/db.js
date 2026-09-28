@@ -99,6 +99,14 @@ export async function initDatabase() {
       avatar_url TEXT,
       active_plan_id INTEGER,
       status TEXT NOT NULL DEFAULT 'active',
+      -- Optional OTP/PIN sign-in support. The phone column above is already the
+      -- account's mobile number and is what mobile OTP/PIN login resolves
+      -- against, so no separate mobile_number column is needed. Every column here
+      -- is nullable or defaulted, so an account created before this feature keeps
+      -- working unchanged and simply has no PIN.
+      mobile_verified INTEGER NOT NULL DEFAULT 0,
+      pin_hash TEXT,
+      pin_enabled INTEGER NOT NULL DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
@@ -131,6 +139,55 @@ export async function initDatabase() {
     );
 
     CREATE TABLE IF NOT EXISTS password_reset_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      token_hash TEXT NOT NULL UNIQUE,
+      expires_at DATETIME NOT NULL,
+      used INTEGER NOT NULL DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    -- =====================================================
+    -- OTP / PIN SIGN-IN SUPPORT (optional login methods)
+    --
+    -- These three tables back the *additional* sign-in methods only. The
+    -- existing email+password, Google and email-verification flows keep using
+    -- their own tables and are untouched by anything stored here.
+    -- =====================================================
+
+      -- One-time codes for signing in (as opposed to verifying an address).
+      -- The token column holds the SHA-256 of the 6-digit code, never the code
+      -- itself, and is namespaced by user id + channel so a code sent to one
+      -- destination can never verify another. One outstanding code per
+      -- (user, channel).
+    CREATE TABLE IF NOT EXISTS login_otp_codes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      channel TEXT NOT NULL DEFAULT 'email',
+      token TEXT NOT NULL UNIQUE,
+      expires_at DATETIME NOT NULL,
+      used INTEGER NOT NULL DEFAULT 0,
+      otp_attempts INTEGER NOT NULL DEFAULT 0,
+      otp_last_sent_at DATETIME NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    -- Brute-force brake for PIN sign-in, mirroring the OTP attempt counter.
+    CREATE TABLE IF NOT EXISTS pin_login_attempts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL UNIQUE,
+      failed_attempts INTEGER NOT NULL DEFAULT 0,
+      locked_until DATETIME DEFAULT NULL,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- Single-use, 10-minute permission to create a PIN. Issued only after a
+    -- successful OTP verification, so a PIN can never be created from a session
+    -- that was not proven with a one-time code. Shaped like
+    -- password_reset_tokens: a random token, its hash, an expiry and a used flag.
+    CREATE TABLE IF NOT EXISTS pin_setup_grants (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
       token_hash TEXT NOT NULL UNIQUE,
@@ -426,6 +483,14 @@ function getMySqlSchemaStatements() {
       avatar_url TEXT NULL,
       active_plan_id INT NULL,
       status VARCHAR(20) NOT NULL DEFAULT 'active',
+      -- Optional OTP/PIN sign-in support. The phone column above is already the
+      -- account's mobile number and is what mobile OTP/PIN login resolves
+      -- against, so no separate mobile_number column is needed. Every column here
+      -- is nullable or defaulted, so an account created before this feature keeps
+      -- working unchanged and simply has no PIN.
+      mobile_verified TINYINT(1) NOT NULL DEFAULT 0,
+      pin_hash VARCHAR(255) NULL,
+      pin_enabled TINYINT(1) NOT NULL DEFAULT 0,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
@@ -461,6 +526,46 @@ function getMySqlSchemaStatements() {
       used TINYINT(1) NOT NULL DEFAULT 0,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       CONSTRAINT fk_prt_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+    // =====================================================
+    // OTP / PIN SIGN-IN SUPPORT (optional login methods)
+    // Mirrors the SQLite DDL above. The existing email+password, Google and
+    // email-verification flows keep using their own tables untouched.
+    // =====================================================
+
+    `CREATE TABLE IF NOT EXISTS login_otp_codes (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NOT NULL,
+      channel VARCHAR(10) NOT NULL DEFAULT 'email',
+      token VARCHAR(128) NOT NULL UNIQUE,
+      expires_at DATETIME NOT NULL,
+      used TINYINT(1) NOT NULL DEFAULT 0,
+      otp_attempts INT NOT NULL DEFAULT 0,
+      otp_last_sent_at DATETIME NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_login_otp_user (user_id, channel),
+      CONSTRAINT fk_loc_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+    `CREATE TABLE IF NOT EXISTS pin_login_attempts (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NOT NULL UNIQUE,
+      failed_attempts INT NOT NULL DEFAULT 0,
+      locked_until DATETIME NULL DEFAULT NULL,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT fk_pla_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+    `CREATE TABLE IF NOT EXISTS pin_setup_grants (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NOT NULL,
+      token_hash VARCHAR(64) NOT NULL UNIQUE,
+      expires_at DATETIME NOT NULL,
+      used TINYINT(1) NOT NULL DEFAULT 0,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_psg_user (user_id),
+      CONSTRAINT fk_psg_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 
     `CREATE TABLE IF NOT EXISTS categories (
@@ -924,7 +1029,8 @@ async function ensureSuperAdmin() {
 /**
  * Best-effort schema migration for databases created before this schema
  * version added payment_method / order_number / razorpay columns to orders,
- * and before email verification moved from a long token to a 6-digit OTP.
+ * before email verification moved from a long token to a 6-digit OTP, and
+ * before the optional OTP/PIN sign-in columns were added to users.
  */
 async function migrateSchema() {
   try {
@@ -952,6 +1058,21 @@ async function migrateSchema() {
       if (!evtCols.includes('otp_attempts')) evtAdditions.push('ALTER TABLE email_verification_tokens ADD COLUMN otp_attempts INTEGER NOT NULL DEFAULT 0');
       if (!evtCols.includes('otp_last_sent_at')) evtAdditions.push('ALTER TABLE email_verification_tokens ADD COLUMN otp_last_sent_at DATETIME DEFAULT NULL');
       for (const stmt of evtAdditions) {
+        await executeQuery(stmt);
+        console.log(`[DB] Migration: applied -> ${stmt}`);
+      }
+
+      // Optional OTP/PIN sign-in columns on users. Every addition is nullable or
+      // carries a default, so existing rows are left exactly as they are and keep
+      // signing in with email+password / Google exactly as before. `phone` is
+      // deliberately reused as the mobile number rather than adding a duplicate
+      // mobile_number column.
+      const userCols = (await executeQuery('PRAGMA table_info(users)')).map((c) => c.name);
+      const userAdditions = [];
+      if (!userCols.includes('mobile_verified')) userAdditions.push('ALTER TABLE users ADD COLUMN mobile_verified INTEGER NOT NULL DEFAULT 0');
+      if (!userCols.includes('pin_hash')) userAdditions.push('ALTER TABLE users ADD COLUMN pin_hash TEXT');
+      if (!userCols.includes('pin_enabled')) userAdditions.push('ALTER TABLE users ADD COLUMN pin_enabled INTEGER NOT NULL DEFAULT 0');
+      for (const stmt of userAdditions) {
         await executeQuery(stmt);
         console.log(`[DB] Migration: applied -> ${stmt}`);
       }
@@ -991,6 +1112,25 @@ async function migrateSchema() {
       } catch {
         await executeQuery(`ALTER TABLE email_verification_tokens ADD COLUMN ${col} ${ddl}`);
         console.log(`[DB] Migration: added email_verification_tokens.${col}`);
+      }
+    }
+
+    // Optional OTP/PIN sign-in columns on users. Same probe-then-add as above:
+    // every addition is nullable or carries a default, so existing rows keep
+    // their data and keep signing in with email+password / Google exactly as
+    // before. `phone` is deliberately reused as the mobile number rather than
+    // adding a duplicate mobile_number column.
+    const userColumnMigrations = [
+      ['mobile_verified', 'TINYINT(1) NOT NULL DEFAULT 0'],
+      ['pin_hash', 'VARCHAR(255) NULL DEFAULT NULL'],
+      ['pin_enabled', 'TINYINT(1) NOT NULL DEFAULT 0'],
+    ];
+    for (const [col, ddl] of userColumnMigrations) {
+      try {
+        await executeQuery(`SELECT ${col} FROM users LIMIT 1`);
+      } catch {
+        await executeQuery(`ALTER TABLE users ADD COLUMN ${col} ${ddl}`);
+        console.log(`[DB] Migration: added users.${col}`);
       }
     }
 

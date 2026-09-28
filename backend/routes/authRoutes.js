@@ -13,6 +13,7 @@ import {
   logout,
 } from '../controllers/authController.js';
 import { authenticate } from '../middleware/authMiddleware.js';
+import otpPinAuthRoutes from './otpPinAuthRoutes.js';
 
 const router = express.Router();
 
@@ -73,5 +74,13 @@ router.get('/me', authenticate, getMe);
 // of accepting anonymous writes. The client discards the JWT regardless of the
 // response, so a failed call can never leave the user stuck in a session.
 router.post('/logout', authenticate, logout);
+
+// =====================================================
+// OPTIONAL OTP / PIN SIGN-IN (added, not replaced)
+// Mounted LAST so its /otp-pin/* paths sit after every existing route. Nothing
+// above is touched: email+password, Google OAuth, email verification, resend,
+// forgot/reset password, /me and /logout all behave exactly as they did.
+// =====================================================
+router.use('/otp-pin', otpPinAuthRoutes);
 
 export default router;

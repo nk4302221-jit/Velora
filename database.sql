@@ -21,6 +21,14 @@ CREATE TABLE IF NOT EXISTS users (
     -- PATCH /api/super-admin/admins/:id/status accept (both validate against
     -- active|inactive|blocked), so a fresh install must be able to store it.
     status ENUM('active', 'inactive', 'blocked', 'suspended') NOT NULL DEFAULT 'active',
+    -- Optional OTP/PIN sign-in support. `phone` above is already the account's
+    -- mobile number (and is what the existing email+password login resolves a
+    -- mobile identifier against), so no separate mobile_number column is needed.
+    -- All three columns below are nullable or defaulted, so an account created
+    -- before this feature is unaffected and simply has no PIN.
+    mobile_verified BOOLEAN NOT NULL DEFAULT FALSE,
+    pin_hash VARCHAR(255) NULL,
+    pin_enabled BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_user_email (email),
@@ -70,6 +78,54 @@ CREATE TABLE IF NOT EXISTS password_reset_tokens (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     INDEX idx_token (token_hash)
+) ENGINE=InnoDB;
+
+-- 3c. OTP / PIN Sign-In Tables (OPTIONAL login methods)
+-- These back only the additional sign-in methods. The existing email+password,
+-- Google OAuth and email-verification flows keep using their own tables and are
+-- unaffected by anything stored here. A user with no PIN (pin_enabled = 0)
+-- simply cannot use PIN sign-in and continues to use every existing method.
+
+-- One-time codes for signing in (as opposed to verifying an address).
+-- `token` holds the SHA-256 of the 6-digit code, never the code itself, and is
+-- namespaced by user id + channel so a code sent to one destination can never
+-- verify another. One outstanding code per (user, channel).
+CREATE TABLE IF NOT EXISTS login_otp_codes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    channel VARCHAR(10) NOT NULL DEFAULT 'email',
+    token VARCHAR(128) NOT NULL UNIQUE,
+    expires_at DATETIME NOT NULL,
+    used BOOLEAN NOT NULL DEFAULT FALSE,
+    otp_attempts INT NOT NULL DEFAULT 0,
+    otp_last_sent_at DATETIME NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_login_otp_user (user_id, channel)
+) ENGINE=InnoDB;
+
+-- Brute-force brake for PIN sign-in, mirroring the OTP attempt counter.
+CREATE TABLE IF NOT EXISTS pin_login_attempts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL UNIQUE,
+    failed_attempts INT NOT NULL DEFAULT 0,
+    locked_until DATETIME NULL DEFAULT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- Single-use, 10-minute permission to create a PIN, issued only after a
+-- successful OTP verification. Shaped like password_reset_tokens: a random
+-- token, its hash, an expiry and a used flag.
+CREATE TABLE IF NOT EXISTS pin_setup_grants (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    token_hash VARCHAR(64) NOT NULL UNIQUE,
+    expires_at DATETIME NOT NULL,
+    used BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_psg_user (user_id)
 ) ENGINE=InnoDB;
 
 -- 4. Categories Table

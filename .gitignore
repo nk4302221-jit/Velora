@@ -9,3 +9,5 @@ coverage/
 
 netstat
 server_pid.txt
+
+data/*.db

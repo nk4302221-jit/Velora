@@ -29,6 +29,7 @@ import { OrdersPage } from './pages/OrdersPage';
 import { OrderDetailsPage } from './pages/OrderDetailsPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { LoginPage } from './pages/LoginPage';
+import { OtpPinLoginPage } from './pages/OtpPinLoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { VerifyEmailPage } from './pages/VerifyEmailPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
@@ -204,6 +205,16 @@ const AppRoutes = () => (
       element={
         <SiteLayout>
           <ResetPasswordPage />
+        </SiteLayout>
+      }
+    />
+    {/* Optional OTP / PIN sign-in. A separate page, so LoginPage and its
+        password form are completely untouched. */}
+    <Route
+      path="/login-otp"
+      element={
+        <SiteLayout>
+          <OtpPinLoginPage />
         </SiteLayout>
       }
     />

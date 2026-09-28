@@ -745,6 +745,30 @@ export const LoginPage = () => {
         </button>
 
         {/* =================================================
+            OPTIONAL OTP / PIN SIGN-IN
+            A single link out to a separate page. Deliberately placed OUTSIDE
+            the <form> above (which closes before the Google button) and
+            deliberately importing nothing new, so the existing password form,
+            its validation, its submit handler and its error states cannot be
+            affected in any way.
+        ================================================= */}
+
+        <Link
+          to="/login-otp"
+          id="login-otp-pin-link"
+          className="btn btn-secondary"
+          style={{
+            width: '100%',
+            fontSize: '13px',
+            marginTop: '12px',
+            textAlign: 'center',
+            textDecoration: 'none',
+          }}
+        >
+          Login with OTP / PIN
+        </Link>
+
+        {/* =================================================
             REGISTER LINK
         ================================================= */}
 

@@ -527,3 +527,78 @@ export async function sendPasswordResetEmail(toEmail, fullName, resetToken) {
 
   return { ...result, resetLink };
 }
+
+// =====================================================
+// SIGN-IN CODE (OTP LOGIN)
+//
+// Additive only. This is the same SMTP transport, the same `deliver()` funnel
+// and the same console/ethereal/disabled semantics as every other message
+// above - no second mail service is introduced. It exists only because signing
+// in with a one-time code is a different *purpose* with different wording from
+// verifying an address, and deliver() takes the purpose as an argument.
+// =====================================================
+
+function buildLoginOtpHtml(fullName, otp) {
+  return `
+      <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 28px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
+        <h2 style="color: #0f172a; margin-top: 0;">Your Velora sign-in code</h2>
+        <p style="color: #475569; font-size: 16px; line-height: 1.6;">
+          Hi ${fullName}, you chose to sign in to Velora with a one-time code instead of a password.
+        </p>
+        <p style="color: #475569; font-size: 16px; line-height: 1.6; margin: 28px 0 12px;">
+          Your sign-in code is:
+        </p>
+        <div style="background-color: #2563eb; color: #ffffff; font-size: 34px; font-weight: 700; letter-spacing: 10px; text-align: center; padding: 20px 0; border-radius: 8px;">
+          ${otp}
+        </div>
+        <p style="color: #475569; font-size: 16px; line-height: 1.6; margin: 24px 0 0;">
+          This code expires in 10 minutes and can only be used once.
+        </p>
+        <p style="color: #94a3b8; font-size: 12px; margin-top: 32px; border-top: 1px solid #f1f5f9; padding-top: 16px;">
+          If you did not try to sign in to Velora, you can ignore this email - no action is needed
+          and your password has not changed.
+        </p>
+      </div>
+    `;
+}
+
+/**
+ * Sends the 6-digit sign-in code for the optional "login with OTP" method.
+ *
+ * Reuses the existing SMTP transport and `deliver()` funnel, so a partial mail
+ * configuration is reported exactly as it is everywhere else in this file
+ * (errorCode SMTP_NOT_CONFIGURED plus the list of missing variables).
+ *
+ * @param {string} toEmail  Recipient. Must be the address stored on the user
+ *                          row, otherwise the code goes to a mailbox the user
+ *                          is not looking at.
+ * @param {string} fullName Display name for the greeting.
+ * @param {string} otp      The 6-digit code. It appears in the message body
+ *                          only - never logged, never returned in the API
+ *                          response, never stored in plain text.
+ */
+export async function sendLoginOtpEmail(toEmail, fullName, otp) {
+  const recipient = String(toEmail || '').trim();
+
+  if (!recipient) {
+    console.error('[Email] Failed to send sign-in code email: no recipient address supplied');
+
+    return {
+      success: false,
+      delivery: 'disabled',
+      previewUrl: null,
+      errorCode: 'NO_RECIPIENT',
+      error: 'A recipient email address is required',
+      missingConfig: [],
+    };
+  }
+
+  return deliver({
+    to: recipient,
+    subject: 'Your Velora sign-in code',
+    html: buildLoginOtpHtml(fullName || 'there', otp),
+    text: `Your Velora sign-in code is: ${otp}\n\nThis code expires in 10 minutes and can only be used once.`,
+    link: null, // A 6-digit code must never be printed to the log.
+    purpose: 'sign-in code',
+  });
+}
