@@ -226,24 +226,21 @@ function buildSmtpTransport() {
   const port =
     Number(process.env.SMTP_PORT) || 587;
 
+  const secure = resolveSecure();
+
   return nodemailer.createTransport({
     host,
     port,
-
-    secure: resolveSecure(),
-
-    // Railway -> Gmail IPv4 fix
+    secure,
     family: 4,
     lookup: ipv4Lookup,
 
-    // Fail fast instead of waiting too long.
-    connectionTimeout: SMTP_TIMEOUT_MS,
-    greetingTimeout: SMTP_TIMEOUT_MS,
-    socketTimeout: SMTP_TIMEOUT_MS,
+    // Gmail port 587 uses STARTTLS.
+    requireTLS: !secure,
 
-    requireTLS:
-      !resolveSecure() &&
-      process.env.SMTP_REQUIRE_TLS === 'true',
+    connectionTimeout: 30000,
+    greetingTimeout: 30000,
+    socketTimeout: 30000,
 
     auth: {
       user,
