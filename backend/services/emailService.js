@@ -9,24 +9,19 @@ import dns from 'node:dns';
  *
  *   smtp      Real delivery. Requires SMTP_HOST + SMTP_USER + SMTP_PASSWORD.
  *             This is the ONLY mode allowed when NODE_ENV=production.
+ *
  *   ethereal  Nodemailer's shared sandbox account. Mail is accepted by the
  *             SMTP server but goes to an @ethereal.email address, NOT to the
  *             real user inbox. Development / QA only.
+ *
  *   console   Nothing is sent anywhere. Development / QA only. Every send is
  *             reported back to the caller as a FAILURE (MAIL_CONSOLE_MODE), so
  *             a verification code can never be claimed as "sent" when it was
  *             not, and the code itself is never printed.
+ *
  *   disabled  No usable configuration. Every send fails fast and loudly with
  *             SMTP_NOT_CONFIGURED instead of silently pretending to succeed.
  *
- * The previous implementation fell back to an Ethereal test account whenever
- * SMTP credentials were missing and STILL returned { success: true }. That is
- * why registration appeared to work while the user never received a code:
- * the mail was delivered to a throwaway sandbox mailbox and the API reported
- * success. Falling back is now opt-in only, and a missing configuration is
- * reported as a failure the caller can surface to the user - naming the exact
- * environment variables that are absent, so the problem is diagnosable without
- * reproducing it by hand.
  * =====================================================
  */
 
@@ -38,36 +33,50 @@ let resolvedFrom = null;
 
 // Connection/auth failures must surface as a fast error rather than leaving an
 // HTTP request hanging while the SMTP socket times out.
-const SMTP_TIMEOUT_MS = Number(process.env.SMTP_TIMEOUT_MS) || 15000;
+const SMTP_TIMEOUT_MS =
+  Number(process.env.SMTP_TIMEOUT_MS) || 15000;
 
 /**
  * =====================================================
  * RAILWAY -> GMAIL SMTP IPv4 DNS FIX
  *
- * Railway was resolving smtp.gmail.com to an IPv6 address and then failing
- * with ENETUNREACH.
+ * Railway was resolving smtp.gmail.com to an IPv6 address
+ * and failing with ENETUNREACH.
  *
- * Force Node DNS lookup to return an IPv4 address only.
+ * Use dns.resolve4() instead of dns.lookup() so that only
+ * IPv4 addresses are returned.
+ *
  * =====================================================
  */
+
 function ipv4Lookup(hostname, options, callback) {
-  dns.lookup(
-    hostname,
-    {
-      ...options,
-      family: 4,
-      all: false,
-    },
-    callback
-  );
+  dns.resolve4(hostname, (error, addresses) => {
+    if (error) {
+      callback(error);
+      return;
+    }
+
+    if (!addresses || addresses.length === 0) {
+      callback(
+        new Error(`No IPv4 address found for ${hostname}`)
+      );
+      return;
+    }
+
+    callback(null, addresses[0], 4);
+  });
 }
 
 /**
- * Everything the log is allowed to know about the transport. The password is
- * never read here, so there is no code path that can print it.
+ * Everything the log is allowed to know about the transport.
+ * The password is never read here, so there is no code path
+ * that can print it.
  */
 function describeConfig() {
-  const user = process.env.SMTP_USER || process.env.SMTP_USERNAME || '';
+  const user =
+    process.env.SMTP_USER ||
+    process.env.SMTP_USERNAME ||
+    '';
 
   return {
     mode: resolvedMode,
@@ -76,7 +85,9 @@ function describeConfig() {
     secure: resolveSecure(),
 
     // Only the domain is logged, never the full mailbox.
-    authUser: user ? maskLocalPart(user) : null,
+    authUser: user
+      ? maskLocalPart(user)
+      : null,
 
     from: resolvedFrom,
 
@@ -86,10 +97,17 @@ function describeConfig() {
 }
 
 function resolveSecure() {
-  const explicit = String(process.env.SMTP_SECURE || '').toLowerCase();
+  const explicit = String(
+    process.env.SMTP_SECURE || ''
+  ).toLowerCase();
 
-  if (explicit === 'true') return true;
-  if (explicit === 'false') return false;
+  if (explicit === 'true') {
+    return true;
+  }
+
+  if (explicit === 'false') {
+    return false;
+  }
 
   return Number(process.env.SMTP_PORT) === 465;
 }
@@ -97,20 +115,30 @@ function resolveSecure() {
 function maskLocalPart(value) {
   const at = String(value).indexOf('@');
 
-  if (at <= 0) return '***';
+  if (at <= 0) {
+    return '***';
+  }
 
-  return `${'*'.repeat(Math.min(at, 3))}@${String(value).slice(at + 1)}`;
+  return `${'*'.repeat(Math.min(at, 3))}@${String(
+    value
+  ).slice(at + 1)}`;
 }
 
 function isProduction() {
-  return String(process.env.NODE_ENV || '').toLowerCase() === 'production';
+  return (
+    String(process.env.NODE_ENV || '').toLowerCase() ===
+    'production'
+  );
 }
 
 /**
- * Reads the delivery configuration and reports WHICH variables are absent.
+ * Reads the delivery configuration and reports WHICH
+ * variables are absent.
  */
 function readSmtpCredentials() {
-  const host = (process.env.SMTP_HOST || '').trim();
+  const host = (
+    process.env.SMTP_HOST || ''
+  ).trim();
 
   const user = (
     process.env.SMTP_USER ||
@@ -132,10 +160,21 @@ function readSmtpCredentials() {
 
   const missing = [];
 
-  if (!host) missing.push('SMTP_HOST');
-  if (!user) missing.push('SMTP_USER');
-  if (!pass) missing.push('SMTP_PASSWORD');
-  if (!from) missing.push('SMTP_FROM');
+  if (!host) {
+    missing.push('SMTP_HOST');
+  }
+
+  if (!user) {
+    missing.push('SMTP_USER');
+  }
+
+  if (!pass) {
+    missing.push('SMTP_PASSWORD');
+  }
+
+  if (!from) {
+    missing.push('SMTP_FROM');
+  }
 
   return {
     host,
@@ -169,7 +208,9 @@ function configurationError(missing) {
 function resolveMode() {
   const requested = String(
     process.env.MAIL_MODE || ''
-  ).trim().toLowerCase();
+  )
+    .trim()
+    .toLowerCase();
 
   const creds = readSmtpCredentials();
 
@@ -203,7 +244,9 @@ function resolveFromAddress() {
 }
 
 function assertModeAllowed(mode) {
-  if (!isProduction()) return;
+  if (!isProduction()) {
+    return;
+  }
 
   if (!PROD_MODES_ALLOWED.has(mode)) {
     throw new Error(
@@ -217,11 +260,14 @@ function assertModeAllowed(mode) {
  * Creates the SMTP transport.
  *
  * IMPORTANT:
- * `family: 4` + `lookup: ipv4Lookup`
+ * dns.resolve4() + family: 4 + lookup: ipv4Lookup
  * forces smtp.gmail.com DNS resolution through IPv4.
+ *
+ * Gmail port 587 uses STARTTLS.
  */
 function buildSmtpTransport() {
-  const { host, user, pass } = readSmtpCredentials();
+  const { host, user, pass } =
+    readSmtpCredentials();
 
   const port =
     Number(process.env.SMTP_PORT) || 587;
@@ -232,11 +278,18 @@ function buildSmtpTransport() {
     host,
     port,
     secure,
+
+    // Force IPv4.
     family: 4,
     lookup: ipv4Lookup,
 
     // Gmail port 587 uses STARTTLS.
     requireTLS: !secure,
+
+    // Keep TLS hostname verification against smtp.gmail.com.
+    tls: {
+      servername: host,
+    },
 
     connectionTimeout: 30000,
     greetingTimeout: 30000,
@@ -259,7 +312,8 @@ async function getTransporter() {
   resolvedFrom = resolveFromAddress();
 
   if (mode === 'disabled') {
-    const { missing } = readSmtpCredentials();
+    const { missing } =
+      readSmtpCredentials();
 
     console.error(
       `[Email] No usable mail transport configured. ${configurationError(
@@ -304,7 +358,8 @@ async function getTransporter() {
       });
     }
 
-    const transport = buildSmtpTransport();
+    const transport =
+      buildSmtpTransport();
 
     // Verify connection before using it.
     try {
@@ -371,13 +426,19 @@ export function getEmailConfigSummary() {
 
 function testMessageUrl(info) {
   try {
-    return nodemailer.getTestMessageUrl(info) || null;
+    return (
+      nodemailer.getTestMessageUrl(info) ||
+      null
+    );
   } catch {
     return null;
   }
 }
 
-function buildVerificationHtml(fullName, otp) {
+function buildVerificationHtml(
+  fullName,
+  otp
+) {
   return `
       <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 28px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
         <h2 style="color: #0f172a; margin-top: 0;">Welcome to Velora, ${fullName}!</h2>
@@ -405,7 +466,10 @@ function buildVerificationHtml(fullName, otp) {
     `;
 }
 
-function buildResetHtml(fullName, resetLink) {
+function buildResetHtml(
+  fullName,
+  resetLink
+) {
   return `
       <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 28px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
         <h2 style="color: #0f172a; margin-top: 0;">Password Reset Request</h2>
@@ -424,6 +488,7 @@ function buildResetHtml(fullName, resetLink) {
         <p style="color: #64748b; font-size: 14px;">
           Or copy and paste this link in your browser:
           <br/>
+
           <a href="${resetLink}" style="color: #2563eb;">
             ${resetLink}
           </a>
@@ -485,7 +550,8 @@ async function deliver({
   let transport;
 
   try {
-    transport = await getTransporter();
+    transport =
+      await getTransporter();
   } catch (error) {
     console.error(
       `[Email] Failed to send ${purpose} email: ${error.message}`
@@ -578,7 +644,8 @@ async function deliver({
 }
 
 /**
- * Sends account verification email containing the 6-digit code.
+ * Sends account verification email containing
+ * the 6-digit code.
  */
 export async function sendVerificationEmail(
   toEmail,
@@ -606,16 +673,21 @@ export async function sendVerificationEmail(
 
   return deliver({
     to: recipient,
+
     subject:
       'Your Velora Email Verification Code',
+
     html: buildVerificationHtml(
       fullName || 'there',
       otp
     ),
+
     text:
       `Your Velora verification code is: ${otp}\n\n` +
       'This code expires in 10 minutes.',
+
     link: null,
+
     purpose: 'verification',
   });
 }
@@ -653,21 +725,27 @@ export async function sendPasswordResetEmail(
     };
   }
 
-  const result = await deliver({
-    to: recipient,
-    subject:
-      'Reset your Velora Account Password',
-    html: buildResetHtml(
-      fullName || 'there',
-      resetLink
-    ),
-    text:
-      `We received a request to reset your Velora password. ` +
-      `Visit this link to choose a new password: ${resetLink} ` +
-      `(expires in 1 hour)`,
-    link: resetLink,
-    purpose: 'password reset',
-  });
+  const result =
+    await deliver({
+      to: recipient,
+
+      subject:
+        'Reset your Velora Account Password',
+
+      html: buildResetHtml(
+        fullName || 'there',
+        resetLink
+      ),
+
+      text:
+        `We received a request to reset your Velora password. ` +
+        `Visit this link to choose a new password: ${resetLink} ` +
+        `(expires in 1 hour)`,
+
+      link: resetLink,
+
+      purpose: 'password reset',
+    });
 
   return {
     ...result,
@@ -685,7 +763,10 @@ function buildLoginOtpHtml(
 ) {
   return `
       <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 28px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
-        <h2 style="color: #0f172a; margin-top: 0;">Your Velora sign-in code</h2>
+
+        <h2 style="color: #0f172a; margin-top: 0;">
+          Your Velora sign-in code
+        </h2>
 
         <p style="color: #475569; font-size: 16px; line-height: 1.6;">
           Hi ${fullName}, you chose to sign in to Velora with a one-time code instead of a password.
@@ -707,6 +788,7 @@ function buildLoginOtpHtml(
           If you did not try to sign in to Velora, you can ignore this email - no action is needed
           and your password has not changed.
         </p>
+
       </div>
     `;
 }
@@ -740,16 +822,21 @@ export async function sendLoginOtpEmail(
 
   return deliver({
     to: recipient,
+
     subject:
       'Your Velora sign-in code',
+
     html: buildLoginOtpHtml(
       fullName || 'there',
       otp
     ),
+
     text:
       `Your Velora sign-in code is: ${otp}\n\n` +
       'This code expires in 10 minutes and can only be used once.',
+
     link: null,
+
     purpose: 'sign-in code',
   });
 }
