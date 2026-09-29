@@ -273,7 +273,7 @@ export const LoginPage = () => {
       if (provider === 'google') {
         const backendUrl =
           import.meta.env.VITE_API_URL ||
-          'http://localhost:5000';
+          'https://velora-production-9955.up.railway.app';
 
         window.location.href =
           `${backendUrl}/api/auth/google`;

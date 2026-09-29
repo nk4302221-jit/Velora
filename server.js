@@ -1,15 +1,21 @@
 import dotenv from 'dotenv';
 import path from 'path';
-import { fileURLToPath } from 'url';
 
-const __filename =
-  typeof import.meta.url !== 'undefined'
-    ? fileURLToPath(import.meta.url)
-    : path.join(process.cwd(), 'server.js');
-const __dirname = path.dirname(__filename);
+// The production bundle is CommonJS (dist/server.cjs), where `import.meta.url`
+// is not available - it bundles to an empty object and makes esbuild warn. The
+// CommonJS equivalent is `__dirname`, which inside the bundle points at dist/,
+// one level below the project root. Under `node server.js` (an ES module, used
+// by `npm run dev`) there is no `__dirname` at all, and the entry script itself
+// sits in the project root, so use that script's directory instead.
+const entryDir =
+  typeof __dirname === 'string'
+    ? __dirname
+    : path.dirname(path.resolve(process.argv[1] || 'server.js'));
+const projectRoot =
+  path.basename(entryDir) === 'dist' ? path.dirname(entryDir) : entryDir;
 
 // Load project-root .env FIRST
-const envPath = path.resolve(__dirname, '.env');
+const envPath = path.resolve(projectRoot, '.env');
 
 dotenv.config({
   path: envPath,

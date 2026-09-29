@@ -559,7 +559,7 @@ export async function socialLogin(req, res) {
  * so we simply hand the JWT to the frontend via a redirect.
  */
 export function googleOAuthCallback(req, res) {
-  const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+  const clientUrl = process.env.CLIENT_URL || 'https://velora-six-chi.vercel.app';
 
   if (!req.user || !req.user.token) {
     return res.redirect(`${clientUrl}/login?error=google_auth_failed`);
