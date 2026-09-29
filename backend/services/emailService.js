@@ -4,28 +4,14 @@ import nodemailer from 'nodemailer';
  * =====================================================
  * OUTBOUND MAIL TRANSPORT
  *
- * Delivery modes (MAIL_MODE), resolved once at startup:
+ * Delivery modes:
  *
- *   smtp      Real delivery. Requires SMTP_HOST + SMTP_USER + SMTP_PASSWORD.
- *             This is the ONLY mode allowed when NODE_ENV=production.
- *   ethereal  Nodemailer's shared sandbox account. Mail is accepted by the
- *             SMTP server but goes to an @ethereal.email address, NOT to the
- *             real user inbox. Development / QA only.
- *   console   Nothing is sent anywhere. Development / QA only. Every send is
- *             reported back to the caller as a FAILURE (MAIL_CONSOLE_MODE), so
- *             a verification code can never be claimed as "sent" when it was
- *             not, and the code itself is never printed.
- *   disabled  No usable configuration. Every send fails fast and loudly with
- *             SMTP_NOT_CONFIGURED instead of silently pretending to succeed.
+ *   smtp      Real email delivery.
+ *   ethereal  Development/test sandbox only.
+ *   console   No email is sent.
+ *   disabled  No usable configuration.
  *
- * The previous implementation fell back to an Ethereal test account whenever
- * SMTP credentials were missing and STILL returned { success: true }. That is
- * why registration appeared to work while the user never received a code: the
- * mail was delivered to a throwaway sandbox mailbox and the API reported
- * success. Falling back is now opt-in only, and a missing configuration is
- * reported as a failure the caller can surface to the user - naming the exact
- * environment variables that are absent, so the problem is diagnosable without
- * reproducing it by hand.
+ * Production only allows SMTP.
  * =====================================================
  */
 
@@ -35,80 +21,125 @@ let transporterPromise = null;
 let resolvedMode = null;
 let resolvedFrom = null;
 
-// Connection/auth failures must surface as a fast error rather than leaving an
-// HTTP request hanging while the SMTP socket times out.
+// SMTP timeout
 const SMTP_TIMEOUT_MS = Number(process.env.SMTP_TIMEOUT_MS) || 15000;
 
 /**
- * Everything the log is allowed to know about the transport. The password is
- * never read here, so there is no code path that can print it.
+ * Return safe mail configuration information.
+ * Password is NEVER returned or logged.
  */
 function describeConfig() {
   const user = process.env.SMTP_USER || process.env.SMTP_USERNAME || '';
+
   return {
     mode: resolvedMode,
     host: process.env.SMTP_HOST || null,
     port: Number(process.env.SMTP_PORT) || 587,
     secure: resolveSecure(),
-    // Only the domain is logged, never the full mailbox: the sender identity
-    // is not a credential but there is no reason to widen the log surface.
     authUser: user ? maskLocalPart(user) : null,
     from: resolvedFrom,
-    // Variable NAMES only, never values. This is the whole point of the
-    // diagnostic: "mail is broken" is not actionable, "SMTP_USER is empty" is.
     missing: readSmtpCredentials().missing,
   };
 }
 
+/**
+ * SMTP secure setting.
+ *
+ * Port 465  -> secure true
+ * Port 587  -> secure false
+ */
 function resolveSecure() {
   const explicit = String(process.env.SMTP_SECURE || '').toLowerCase();
+
   if (explicit === 'true') return true;
   if (explicit === 'false') return false;
+
   return Number(process.env.SMTP_PORT) === 465;
 }
 
+/**
+ * Hide mailbox local part in logs.
+ */
 function maskLocalPart(value) {
   const at = String(value).indexOf('@');
-  if (at <= 0) return '***';
+
+  if (at <= 0) {
+    return '***';
+  }
+
   return `${'*'.repeat(Math.min(at, 3))}@${String(value).slice(at + 1)}`;
 }
 
+/**
+ * Check production environment.
+ */
 function isProduction() {
   return String(process.env.NODE_ENV || '').toLowerCase() === 'production';
 }
 
 /**
- * Reads the delivery configuration and, crucially, reports WHICH variables are
- * absent. Every value is treated as a secret: only the names are ever returned,
- * so this result is safe to log and safe to hand back to the API caller.
+ * Read SMTP configuration.
  *
- * SMTP_FROM is required rather than defaulted because a placeholder sender is
- * rejected by essentially every real provider ("From address does not match a
- * verified sender"), which presents as an unrelated 550/553 error at send time.
- * Requiring it up front turns that into one clear, actionable message.
+ * Only variable names are returned in `missing`.
+ * Password value is never exposed.
  */
 function readSmtpCredentials() {
   const host = (process.env.SMTP_HOST || '').trim();
-  const user = (process.env.SMTP_USER || process.env.SMTP_USERNAME || '').trim();
-  const pass = process.env.SMTP_PASSWORD || process.env.SMTP_PASS || '';
-  const from = (process.env.SMTP_FROM || process.env.EMAIL_FROM || process.env.MAIL_FROM || '').trim();
+
+  const user = (
+    process.env.SMTP_USER ||
+    process.env.SMTP_USERNAME ||
+    ''
+  ).trim();
+
+  const pass =
+    process.env.SMTP_PASSWORD ||
+    process.env.SMTP_PASS ||
+    '';
+
+  const from = (
+    process.env.SMTP_FROM ||
+    process.env.EMAIL_FROM ||
+    process.env.MAIL_FROM ||
+    ''
+  ).trim();
 
   const missing = [];
-  if (!host) missing.push('SMTP_HOST');
-  if (!user) missing.push('SMTP_USER');
-  if (!pass) missing.push('SMTP_PASSWORD');
-  if (!from) missing.push('SMTP_FROM');
 
-  return { host, user, pass, from, complete: missing.length === 0, missing };
+  if (!host) {
+    missing.push('SMTP_HOST');
+  }
+
+  if (!user) {
+    missing.push('SMTP_USER');
+  }
+
+  if (!pass) {
+    missing.push('SMTP_PASSWORD');
+  }
+
+  if (!from) {
+    missing.push('SMTP_FROM');
+  }
+
+  return {
+    host,
+    user,
+    pass,
+    from,
+    complete: missing.length === 0,
+    missing,
+  };
 }
 
 /**
- * The single wording used for every "mail cannot be sent" configuration failure,
- * so the operator sees the same actionable sentence in the log, in the API
- * response and in the admin diagnostics.
+ * Standard SMTP configuration error.
  */
 function configurationError(missing) {
-  const list = missing && missing.length ? missing.join(', ') : 'the SMTP_* variables';
+  const list =
+    missing && missing.length
+      ? missing.join(', ')
+      : 'the SMTP_* variables';
 
   return (
     `Mail transport is not configured. Missing or empty: ${list}. ` +
@@ -118,16 +149,18 @@ function configurationError(missing) {
 }
 
 /**
- * Resolves the delivery mode and validates it against the environment.
- * Throws for any configuration that cannot work, so the failure is reported at
- * the point of use rather than after a long SMTP timeout.
+ * Resolve email delivery mode.
  */
 function resolveMode() {
-  const requested = String(process.env.MAIL_MODE || '').trim().toLowerCase();
+  const requested = String(
+    process.env.MAIL_MODE || ''
+  )
+    .trim()
+    .toLowerCase();
+
   const creds = readSmtpCredentials();
 
-  // A complete credential set always wins, whatever MAIL_MODE says, because it
-  // is the only configuration that delivers to a real inbox.
+  // Complete SMTP configuration always uses SMTP.
   if (creds.complete) {
     return 'smtp';
   }
@@ -144,10 +177,12 @@ function resolveMode() {
     return 'disabled';
   }
 
-  // No MAIL_MODE, or an unrecognised value, and no usable credentials.
   return 'disabled';
 }
 
+/**
+ * Resolve sender address.
+ */
 function resolveFromAddress() {
   return (
     process.env.SMTP_FROM ||
@@ -157,94 +192,165 @@ function resolveFromAddress() {
   );
 }
 
+/**
+ * Production only permits SMTP.
+ */
 function assertModeAllowed(mode) {
-  if (!isProduction()) return;
+  if (!isProduction()) {
+    return;
+  }
 
   if (!PROD_MODES_ALLOWED.has(mode)) {
     throw new Error(
       `MAIL_MODE="${mode}" is not permitted when NODE_ENV=production. ` +
-        'Configure SMTP_HOST / SMTP_USER / SMTP_PASSWORD and set MAIL_MODE=smtp.'
+      'Configure SMTP_HOST / SMTP_USER / SMTP_PASSWORD and set MAIL_MODE=smtp.'
     );
   }
 }
 
+/**
+ * =====================================================
+ * SMTP TRANSPORT
+ * =====================================================
+ *
+ * IMPORTANT:
+ * `family: 4` forces IPv4.
+ *
+ * Railway was attempting to connect to Gmail over IPv6:
+ *
+ *   ENETUNREACH ...:587
+ *
+ * Force IPv4 to avoid that Railway IPv6 routing issue.
+ */
 function buildSmtpTransport() {
   const { host, user, pass } = readSmtpCredentials();
-  const port = Number(process.env.SMTP_PORT) || 587;
+
+  const port =
+    Number(process.env.SMTP_PORT) || 587;
 
   return nodemailer.createTransport({
     host,
+
     port,
+
     secure: resolveSecure(),
-    // Fail fast instead of queueing for minutes behind an unreachable server.
+
+    // Railway -> Gmail SMTP IPv4 fix
+    family: 4,
+
+    // Fail fast instead of waiting too long.
     connectionTimeout: SMTP_TIMEOUT_MS,
+
     greetingTimeout: SMTP_TIMEOUT_MS,
+
     socketTimeout: SMTP_TIMEOUT_MS,
-    requireTLS: !resolveSecure() && process.env.SMTP_REQUIRE_TLS === 'true',
-    auth: { user, pass },
+
+    requireTLS:
+      !resolveSecure() &&
+      process.env.SMTP_REQUIRE_TLS === 'true',
+
+    auth: {
+      user,
+      pass,
+    },
   });
 }
 
 /**
- * Builds (once) and validates the transport for the resolved mode.
- * Returns null when the mode is `disabled` — callers treat that as a failure,
- * never as a success.
+ * =====================================================
+ * GET TRANSPORTER
+ * =====================================================
  */
 async function getTransporter() {
   const mode = resolveMode();
+
   resolvedMode = mode;
   resolvedFrom = resolveFromAddress();
 
+  /**
+   * No usable configuration.
+   */
   if (mode === 'disabled') {
     const { missing } = readSmtpCredentials();
 
     console.error(
-      `[Email] No usable mail transport configured. ${configurationError(missing)}`
+      `[Email] No usable mail transport configured. ${configurationError(
+        missing
+      )}`
     );
 
     return null;
   }
 
+  /**
+   * Production validation.
+   */
   assertModeAllowed(mode);
 
+  /**
+   * Console mode.
+   */
   if (mode === 'console') {
     console.warn(
-      '[Email] MAIL_MODE=console - NO EMAIL IS SENT. Every send is reported as a failure.'
+      '[Email] MAIL_MODE=console - NO EMAIL IS SENT. ' +
+      'Every send is reported as a failure.'
     );
 
     return null;
   }
 
-  if (transporterPromise) return transporterPromise;
+  /**
+   * Reuse existing transporter.
+   */
+  if (transporterPromise) {
+    return transporterPromise;
+  }
 
+  /**
+   * Create transporter only once.
+   */
   transporterPromise = (async () => {
+    /**
+     * Ethereal development mode.
+     */
     if (mode === 'ethereal') {
       console.warn(
-        '[Email] MAIL_MODE=ethereal - mail is delivered to a throwaway @ethereal.email sandbox, NOT to the real user inbox.'
+        '[Email] MAIL_MODE=ethereal - mail is delivered to a ' +
+        'throwaway @ethereal.email sandbox, NOT to the real user inbox.'
       );
 
-      const testAccount = await nodemailer.createTestAccount();
+      const testAccount =
+        await nodemailer.createTestAccount();
 
       return nodemailer.createTransport({
         host: 'smtp.ethereal.email',
         port: 587,
         secure: false,
-        auth: { user: testAccount.user, pass: testAccount.pass },
+
+        auth: {
+          user: testAccount.user,
+          pass: testAccount.pass,
+        },
       });
     }
 
+    /**
+     * Real SMTP mode.
+     */
     const transport = buildSmtpTransport();
 
-    // A credential/host error is only detectable by actually talking to the
-    // server, and it is by far the most common misconfiguration. Verify once,
-    // up front, so the log says exactly what is wrong.
+    /**
+     * Verify SMTP connection before sending.
+     */
     try {
       await transport.verify();
     } catch (error) {
-      // Do not cache a transport that just failed to authenticate.
+      // Do not cache failed transporter.
       transporterPromise = null;
 
-      throw new Error(`SMTP connection failed: ${error.message}`);
+      throw new Error(
+        `SMTP connection failed: ${error.message}`
+      );
     }
 
     return transport;
@@ -254,30 +360,47 @@ async function getTransporter() {
 }
 
 /**
- * Startup diagnostic. Reports the resolved mode and a masked view of the
- * configuration. Safe to call on boot: it never touches the password and only
- * performs a network handshake when SMTP credentials are actually present.
+ * =====================================================
+ * STARTUP EMAIL DIAGNOSTICS
+ * =====================================================
  */
 export async function logEmailDiagnostics() {
   resolvedMode = resolveMode();
   resolvedFrom = resolveFromAddress();
 
   const summary = describeConfig();
-  console.log('[Email] Mail configuration:', summary);
 
-  if (summary.mode !== 'smtp') return summary;
+  console.log(
+    '[Email] Mail configuration:',
+    summary
+  );
+
+  if (summary.mode !== 'smtp') {
+    return summary;
+  }
 
   try {
     await getTransporter();
-    console.log('[Email] SMTP transporter verified successfully - real email delivery is active.');
+
+    console.log(
+      '[Email] SMTP transporter verified successfully - ' +
+      'real email delivery is active.'
+    );
   } catch (error) {
-    console.error('[Email] SMTP transporter verification failed:', error.message);
+    console.error(
+      '[Email] SMTP transporter verification failed:',
+      error.message
+    );
   }
 
   return summary;
 }
 
-/** Exposed for tests / diagnostics. Never returns credentials. */
+/**
+ * Exposed for tests/diagnostics.
+ *
+ * Never returns SMTP password.
+ */
 export function getEmailConfigSummary() {
   resolvedMode = resolveMode();
   resolvedFrom = resolveFromAddress();
@@ -285,6 +408,11 @@ export function getEmailConfigSummary() {
   return describeConfig();
 }
 
+/**
+ * =====================================================
+ * ETHEREAL PREVIEW URL
+ * =====================================================
+ */
 function testMessageUrl(info) {
   try {
     return nodemailer.getTestMessageUrl(info) || null;
@@ -293,103 +421,239 @@ function testMessageUrl(info) {
   }
 }
 
+/**
+ * =====================================================
+ * VERIFICATION EMAIL HTML
+ * =====================================================
+ */
 function buildVerificationHtml(fullName, otp) {
   return `
-      <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 28px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
-        <h2 style="color: #0f172a; margin-top: 0;">Welcome to Velora, ${fullName}!</h2>
-        <p style="color: #475569; font-size: 16px; line-height: 1.6;">
-          Thank you for signing up. Please verify your email address to activate your account and start shopping.
-        </p>
-        <p style="color: #475569; font-size: 16px; line-height: 1.6; margin: 28px 0 12px;">
-          Your Velora verification code is:
-        </p>
-        <div style="background-color: #2563eb; color: #ffffff; font-size: 34px; font-weight: 700; letter-spacing: 10px; text-align: center; padding: 20px 0; border-radius: 8px;">
-          ${otp}
-        </div>
-        <p style="color: #475569; font-size: 16px; line-height: 1.6; margin: 24px 0 0;">
-          This code expires in 10 minutes.
-        </p>
-        <p style="color: #94a3b8; font-size: 12px; margin-top: 32px; border-top: 1px solid #f1f5f9; padding-top: 16px;">
-          Enter this code on the Velora verification page. If you did not create this account, please ignore this email.
-        </p>
-      </div>
-    `;
-}
+    <div style="
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 28px;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      background: #ffffff;
+    ">
 
-function buildResetHtml(fullName, resetLink) {
-  return `
-      <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 28px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
-        <h2 style="color: #0f172a; margin-top: 0;">Password Reset Request</h2>
-        <p style="color: #475569; font-size: 16px; line-height: 1.6;">
-          Hi ${fullName}, we received a request to reset the password for your Velora account.
-          Click the button below to choose a new password.
-        </p>
-        <div style="margin: 28px 0;">
-          <a href="${resetLink}" style="background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 14px 28px; font-weight: 600; border-radius: 8px; display: inline-block;">
-            Reset Password
-          </a>
-        </div>
-        <p style="color: #64748b; font-size: 14px;">
-          Or copy and paste this link in your browser: <br/>
-          <a href="${resetLink}" style="color: #2563eb;">${resetLink}</a>
-        </p>
-        <p style="color: #94a3b8; font-size: 12px; margin-top: 32px; border-top: 1px solid #f1f5f9; padding-top: 16px;">
-          This link will expire in 1 hour. If you did not request a password reset, please ignore this email.
-        </p>
+      <h2 style="
+        color: #0f172a;
+        margin-top: 0;
+      ">
+        Welcome to Velora, ${fullName}!
+      </h2>
+
+      <p style="
+        color: #475569;
+        font-size: 16px;
+        line-height: 1.6;
+      ">
+        Thank you for signing up.
+        Please verify your email address to activate
+        your account and start shopping.
+      </p>
+
+      <p style="
+        color: #475569;
+        font-size: 16px;
+        line-height: 1.6;
+        margin: 28px 0 12px;
+      ">
+        Your Velora verification code is:
+      </p>
+
+      <div style="
+        background-color: #2563eb;
+        color: #ffffff;
+        font-size: 34px;
+        font-weight: 700;
+        letter-spacing: 10px;
+        text-align: center;
+        padding: 20px 0;
+        border-radius: 8px;
+      ">
+        ${otp}
       </div>
-    `;
+
+      <p style="
+        color: #475569;
+        font-size: 16px;
+        line-height: 1.6;
+        margin: 24px 0 0;
+      ">
+        This code expires in 10 minutes.
+      </p>
+
+      <p style="
+        color: #94a3b8;
+        font-size: 12px;
+        margin-top: 32px;
+        border-top: 1px solid #f1f5f9;
+        padding-top: 16px;
+      ">
+        Enter this code on the Velora verification page.
+        If you did not create this account, please ignore this email.
+      </p>
+
+    </div>
+  `;
 }
 
 /**
- * Single funnel for every outbound message.
- *
- * Returns a uniform shape so the calling controller never has to guess:
- *   { success: boolean, delivery: 'smtp'|'ethereal'|'console', previewUrl,
- *     errorCode: string|null, error: string|null }
+ * =====================================================
+ * PASSWORD RESET HTML
+ * =====================================================
  */
-async function deliver({ to, subject, html, text, link, purpose }) {
+function buildResetHtml(fullName, resetLink) {
+  return `
+    <div style="
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 28px;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      background: #ffffff;
+    ">
+
+      <h2 style="
+        color: #0f172a;
+        margin-top: 0;
+      ">
+        Password Reset Request
+      </h2>
+
+      <p style="
+        color: #475569;
+        font-size: 16px;
+        line-height: 1.6;
+      ">
+        Hi ${fullName}, we received a request to reset
+        the password for your Velora account.
+        Click the button below to choose a new password.
+      </p>
+
+      <div style="margin: 28px 0;">
+
+        <a
+          href="${resetLink}"
+          style="
+            background-color: #2563eb;
+            color: #ffffff;
+            text-decoration: none;
+            padding: 14px 28px;
+            font-weight: 600;
+            border-radius: 8px;
+            display: inline-block;
+          "
+        >
+          Reset Password
+        </a>
+
+      </div>
+
+      <p style="
+        color: #64748b;
+        font-size: 14px;
+      ">
+        Or copy and paste this link in your browser:
+        <br/>
+
+        <a
+          href="${resetLink}"
+          style="color: #2563eb;"
+        >
+          ${resetLink}
+        </a>
+      </p>
+
+      <p style="
+        color: #94a3b8;
+        font-size: 12px;
+        margin-top: 32px;
+        border-top: 1px solid #f1f5f9;
+        padding-top: 16px;
+      ">
+        This link will expire in 1 hour.
+        If you did not request a password reset,
+        please ignore this email.
+      </p>
+
+    </div>
+  `;
+}
+
+/**
+ * =====================================================
+ * COMMON EMAIL DELIVERY FUNNEL
+ * =====================================================
+ */
+async function deliver({
+  to,
+  subject,
+  html,
+  text,
+  link,
+  purpose,
+}) {
   const mode = resolveMode();
+
   resolvedMode = mode;
   resolvedFrom = resolveFromAddress();
 
-  console.log(`[Email] Preparing ${purpose} email`, {
-    to,
-    subject,
-    transport: describeConfig(),
-  });
+  console.log(
+    `[Email] Preparing ${purpose} email`,
+    {
+      to,
+      subject,
+      transport: describeConfig(),
+    }
+  );
 
+  /**
+   * Console mode
+   */
   if (mode === 'console') {
     console.warn(
       `[Email] MAIL_MODE=console - ${purpose} email NOT sent to ${to}. ` +
-        'Nothing is delivered anywhere in this mode.'
+      'Nothing is delivered anywhere in this mode.'
     );
 
-    // A link (password reset) is still printable, because a link is not a
-    // secret. A 6-digit verification code deliberately is NOT printed: codes
-    // must never reach the log, and this is exactly the mode a developer runs
-    // in by mistake.
+    /**
+     * Password reset link can be logged.
+     *
+     * OTP is intentionally never logged.
+     */
     if (link) {
       console.warn(`        ${link}`);
     }
 
-    // Reported as a FAILURE. Nothing left the process, so claiming success
-    // would tell the user a code is on its way when it never was.
     return {
       success: false,
       delivery: 'console',
       previewUrl: null,
       errorCode: 'MAIL_CONSOLE_MODE',
-      error: 'MAIL_MODE=console is active, so no email is delivered. Configure SMTP_HOST / SMTP_USER / SMTP_PASSWORD / SMTP_FROM for real delivery.',
+      error:
+        'MAIL_MODE=console is active, so no email is delivered. ' +
+        'Configure SMTP_HOST / SMTP_USER / SMTP_PASSWORD / SMTP_FROM ' +
+        'for real delivery.',
       missingConfig: [],
     };
   }
 
   let transport;
 
+  /**
+   * Get SMTP transporter.
+   */
   try {
     transport = await getTransporter();
   } catch (error) {
-    console.error(`[Email] Failed to send ${purpose} email: ${error.message}`);
+    console.error(
+      `[Email] Failed to send ${purpose} email: ${error.message}`
+    );
 
     return {
       success: false,
@@ -401,8 +665,12 @@ async function deliver({ to, subject, html, text, link, purpose }) {
     };
   }
 
+  /**
+   * No transporter available.
+   */
   if (!transport) {
-    const { missing } = readSmtpCredentials();
+    const { missing } =
+      readSmtpCredentials();
 
     return {
       success: false,
@@ -414,6 +682,9 @@ async function deliver({ to, subject, html, text, link, purpose }) {
     };
   }
 
+  /**
+   * Send actual email.
+   */
   try {
     const info = await transport.sendMail({
       from: resolvedFrom,
@@ -423,16 +694,22 @@ async function deliver({ to, subject, html, text, link, purpose }) {
       text,
     });
 
-    const previewUrl = mode === 'ethereal' ? testMessageUrl(info) : null;
+    const previewUrl =
+      mode === 'ethereal'
+        ? testMessageUrl(info)
+        : null;
 
-    console.log(`[Email] ${purpose} email sent successfully`, {
-      to,
-      delivery: mode,
-      messageId: info?.messageId || null,
-      accepted: info?.accepted?.length || 0,
-      rejected: info?.rejected?.length || 0,
-      previewUrl,
-    });
+    console.log(
+      `[Email] ${purpose} email sent successfully`,
+      {
+        to,
+        delivery: mode,
+        messageId: info?.messageId || null,
+        accepted: info?.accepted?.length || 0,
+        rejected: info?.rejected?.length || 0,
+        previewUrl,
+      }
+    );
 
     return {
       success: true,
@@ -443,17 +720,22 @@ async function deliver({ to, subject, html, text, link, purpose }) {
       missingConfig: [],
     };
   } catch (error) {
-    console.error(`[Email] Failed to send ${purpose} email: ${error.message}`, {
-      to,
-      code: error?.code || null,
-      command: error?.command || null,
-    });
+    console.error(
+      `[Email] Failed to send ${purpose} email: ${error.message}`,
+      {
+        to,
+        code: error?.code || null,
+        command: error?.command || null,
+      }
+    );
 
     return {
       success: false,
       delivery: mode,
       previewUrl: null,
-      errorCode: error?.code || 'SMTP_SEND_FAILED',
+      errorCode:
+        error?.code ||
+        'SMTP_SEND_FAILED',
       error: error.message,
       missingConfig: [],
     };
@@ -461,56 +743,91 @@ async function deliver({ to, subject, html, text, link, purpose }) {
 }
 
 /**
- * Sends the account verification email containing the 6-digit code.
- *
- * @param {string} toEmail  Recipient. Must be the same address stored on the
- *                          user row, otherwise the code goes to a mailbox the
- *                          user is not looking at.
- * @param {string} fullName Display name for the greeting.
- * @param {string} otp      The 6-digit code. It appears in the message body
- *                          only - it is never logged, never returned in the
- *                          API response and never stored in plain text.
+ * =====================================================
+ * EMAIL VERIFICATION OTP
+ * =====================================================
  */
-export async function sendVerificationEmail(toEmail, fullName, otp) {
-  const recipient = String(toEmail || '').trim();
+export async function sendVerificationEmail(
+  toEmail,
+  fullName,
+  otp
+) {
+  const recipient =
+    String(toEmail || '').trim();
 
   if (!recipient) {
-    console.error('[Email] Failed to send verification email: no recipient address supplied');
+    console.error(
+      '[Email] Failed to send verification email: ' +
+      'no recipient address supplied'
+    );
 
     return {
       success: false,
       delivery: 'disabled',
       previewUrl: null,
       errorCode: 'NO_RECIPIENT',
-      error: 'A recipient email address is required',
+      error:
+        'A recipient email address is required',
       missingConfig: [],
     };
   }
 
   return deliver({
     to: recipient,
-    subject: 'Your Velora Email Verification Code',
-    html: buildVerificationHtml(fullName || 'there', otp),
-    text: `Your Velora verification code is: ${otp}\n\nThis code expires in 10 minutes.`,
-    link: null, // A 6-digit code must never be printed to the log.
+
+    subject:
+      'Your Velora Email Verification Code',
+
+    html: buildVerificationHtml(
+      fullName || 'there',
+      otp
+    ),
+
+    text:
+      `Your Velora verification code is: ${otp}\n\n` +
+      'This code expires in 10 minutes.',
+
+    // OTP must never be printed to logs.
+    link: null,
+
     purpose: 'verification',
   });
 }
 
-export async function sendPasswordResetEmail(toEmail, fullName, resetToken) {
-  const recipient = String(toEmail || '').trim();
-  const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
-  const resetLink = `${clientUrl}/reset-password?token=${encodeURIComponent(resetToken)}`;
+/**
+ * =====================================================
+ * PASSWORD RESET EMAIL
+ * =====================================================
+ */
+export async function sendPasswordResetEmail(
+  toEmail,
+  fullName,
+  resetToken
+) {
+  const recipient =
+    String(toEmail || '').trim();
+
+  const clientUrl =
+    process.env.CLIENT_URL ||
+    'https://velora-six-chi.vercel.app';
+
+  const resetLink =
+    `${clientUrl}/reset-password?token=` +
+    encodeURIComponent(resetToken);
 
   if (!recipient) {
-    console.error('[Email] Failed to send password reset email: no recipient address supplied');
+    console.error(
+      '[Email] Failed to send password reset email: ' +
+      'no recipient address supplied'
+    );
 
     return {
       success: false,
       delivery: 'disabled',
       previewUrl: null,
       errorCode: 'NO_RECIPIENT',
-      error: 'A recipient email address is required',
+      error:
+        'A recipient email address is required',
       missingConfig: [],
       resetLink,
     };
@@ -518,87 +835,162 @@ export async function sendPasswordResetEmail(toEmail, fullName, resetToken) {
 
   const result = await deliver({
     to: recipient,
-    subject: 'Reset your Velora Account Password',
-    html: buildResetHtml(fullName || 'there', resetLink),
-    text: `We received a request to reset your Velora password. Visit this link to choose a new password: ${resetLink} (expires in 1 hour)`,
+
+    subject:
+      'Reset your Velora Account Password',
+
+    html: buildResetHtml(
+      fullName || 'there',
+      resetLink
+    ),
+
+    text:
+      `We received a request to reset your Velora password. ` +
+      `Visit this link to choose a new password: ${resetLink} ` +
+      '(expires in 1 hour)',
+
     link: resetLink,
+
     purpose: 'password reset',
   });
 
-  return { ...result, resetLink };
-}
-
-// =====================================================
-// SIGN-IN CODE (OTP LOGIN)
-//
-// Additive only. This is the same SMTP transport, the same `deliver()` funnel
-// and the same console/ethereal/disabled semantics as every other message
-// above - no second mail service is introduced. It exists only because signing
-// in with a one-time code is a different *purpose* with different wording from
-// verifying an address, and deliver() takes the purpose as an argument.
-// =====================================================
-
-function buildLoginOtpHtml(fullName, otp) {
-  return `
-      <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 28px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
-        <h2 style="color: #0f172a; margin-top: 0;">Your Velora sign-in code</h2>
-        <p style="color: #475569; font-size: 16px; line-height: 1.6;">
-          Hi ${fullName}, you chose to sign in to Velora with a one-time code instead of a password.
-        </p>
-        <p style="color: #475569; font-size: 16px; line-height: 1.6; margin: 28px 0 12px;">
-          Your sign-in code is:
-        </p>
-        <div style="background-color: #2563eb; color: #ffffff; font-size: 34px; font-weight: 700; letter-spacing: 10px; text-align: center; padding: 20px 0; border-radius: 8px;">
-          ${otp}
-        </div>
-        <p style="color: #475569; font-size: 16px; line-height: 1.6; margin: 24px 0 0;">
-          This code expires in 10 minutes and can only be used once.
-        </p>
-        <p style="color: #94a3b8; font-size: 12px; margin-top: 32px; border-top: 1px solid #f1f5f9; padding-top: 16px;">
-          If you did not try to sign in to Velora, you can ignore this email - no action is needed
-          and your password has not changed.
-        </p>
-      </div>
-    `;
+  return {
+    ...result,
+    resetLink,
+  };
 }
 
 /**
- * Sends the 6-digit sign-in code for the optional "login with OTP" method.
- *
- * Reuses the existing SMTP transport and `deliver()` funnel, so a partial mail
- * configuration is reported exactly as it is everywhere else in this file
- * (errorCode SMTP_NOT_CONFIGURED plus the list of missing variables).
- *
- * @param {string} toEmail  Recipient. Must be the address stored on the user
- *                          row, otherwise the code goes to a mailbox the user
- *                          is not looking at.
- * @param {string} fullName Display name for the greeting.
- * @param {string} otp      The 6-digit code. It appears in the message body
- *                          only - never logged, never returned in the API
- *                          response, never stored in plain text.
+ * =====================================================
+ * LOGIN OTP
+ * =====================================================
  */
-export async function sendLoginOtpEmail(toEmail, fullName, otp) {
-  const recipient = String(toEmail || '').trim();
+function buildLoginOtpHtml(
+  fullName,
+  otp
+) {
+  return `
+    <div style="
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 28px;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      background: #ffffff;
+    ">
+
+      <h2 style="
+        color: #0f172a;
+        margin-top: 0;
+      ">
+        Your Velora sign-in code
+      </h2>
+
+      <p style="
+        color: #475569;
+        font-size: 16px;
+        line-height: 1.6;
+      ">
+        Hi ${fullName}, you chose to sign in to Velora
+        with a one-time code instead of a password.
+      </p>
+
+      <p style="
+        color: #475569;
+        font-size: 16px;
+        line-height: 1.6;
+        margin: 28px 0 12px;
+      ">
+        Your sign-in code is:
+      </p>
+
+      <div style="
+        background-color: #2563eb;
+        color: #ffffff;
+        font-size: 34px;
+        font-weight: 700;
+        letter-spacing: 10px;
+        text-align: center;
+        padding: 20px 0;
+        border-radius: 8px;
+      ">
+        ${otp}
+      </div>
+
+      <p style="
+        color: #475569;
+        font-size: 16px;
+        line-height: 1.6;
+        margin: 24px 0 0;
+      ">
+        This code expires in 10 minutes
+        and can only be used once.
+      </p>
+
+      <p style="
+        color: #94a3b8;
+        font-size: 12px;
+        margin-top: 32px;
+        border-top: 1px solid #f1f5f9;
+        padding-top: 16px;
+      ">
+        If you did not try to sign in to Velora,
+        you can ignore this email.
+      </p>
+
+    </div>
+  `;
+}
+
+/**
+ * =====================================================
+ * LOGIN OTP EMAIL
+ * =====================================================
+ */
+export async function sendLoginOtpEmail(
+  toEmail,
+  fullName,
+  otp
+) {
+  const recipient =
+    String(toEmail || '').trim();
 
   if (!recipient) {
-    console.error('[Email] Failed to send sign-in code email: no recipient address supplied');
+    console.error(
+      '[Email] Failed to send sign-in code email: ' +
+      'no recipient address supplied'
+    );
 
     return {
       success: false,
       delivery: 'disabled',
       previewUrl: null,
       errorCode: 'NO_RECIPIENT',
-      error: 'A recipient email address is required',
+      error:
+        'A recipient email address is required',
       missingConfig: [],
     };
   }
 
   return deliver({
     to: recipient,
-    subject: 'Your Velora sign-in code',
-    html: buildLoginOtpHtml(fullName || 'there', otp),
-    text: `Your Velora sign-in code is: ${otp}\n\nThis code expires in 10 minutes and can only be used once.`,
-    link: null, // A 6-digit code must never be printed to the log.
+
+    subject:
+      'Your Velora sign-in code',
+
+    html: buildLoginOtpHtml(
+      fullName || 'there',
+      otp
+    ),
+
+    text:
+      `Your Velora sign-in code is: ${otp}\n\n` +
+      'This code expires in 10 minutes and can only be used once.',
+
+    // Never log OTP.
+    link: null,
+
     purpose: 'sign-in code',
   });
 }
