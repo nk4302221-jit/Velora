@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import dns from 'node:dns';
 
 /**
  * =====================================================
@@ -22,14 +23,18 @@ let resolvedMode = null;
 let resolvedFrom = null;
 
 // SMTP timeout
-const SMTP_TIMEOUT_MS = Number(process.env.SMTP_TIMEOUT_MS) || 15000;
+const SMTP_TIMEOUT_MS =
+  Number(process.env.SMTP_TIMEOUT_MS) || 15000;
 
 /**
  * Return safe mail configuration information.
  * Password is NEVER returned or logged.
  */
 function describeConfig() {
-  const user = process.env.SMTP_USER || process.env.SMTP_USERNAME || '';
+  const user =
+    process.env.SMTP_USER ||
+    process.env.SMTP_USERNAME ||
+    '';
 
   return {
     mode: resolvedMode,
@@ -45,11 +50,13 @@ function describeConfig() {
 /**
  * SMTP secure setting.
  *
- * Port 465  -> secure true
- * Port 587  -> secure false
+ * Port 465 -> secure true
+ * Port 587 -> secure false
  */
 function resolveSecure() {
-  const explicit = String(process.env.SMTP_SECURE || '').toLowerCase();
+  const explicit = String(
+    process.env.SMTP_SECURE || ''
+  ).toLowerCase();
 
   if (explicit === 'true') return true;
   if (explicit === 'false') return false;
@@ -67,14 +74,19 @@ function maskLocalPart(value) {
     return '***';
   }
 
-  return `${'*'.repeat(Math.min(at, 3))}@${String(value).slice(at + 1)}`;
+  return `${'*'.repeat(Math.min(at, 3))}@${String(
+    value
+  ).slice(at + 1)}`;
 }
 
 /**
  * Check production environment.
  */
 function isProduction() {
-  return String(process.env.NODE_ENV || '').toLowerCase() === 'production';
+  return (
+    String(process.env.NODE_ENV || '').toLowerCase() ===
+    'production'
+  );
 }
 
 /**
@@ -84,7 +96,9 @@ function isProduction() {
  * Password value is never exposed.
  */
 function readSmtpCredentials() {
-  const host = (process.env.SMTP_HOST || '').trim();
+  const host = (
+    process.env.SMTP_HOST || ''
+  ).trim();
 
   const user = (
     process.env.SMTP_USER ||
@@ -203,7 +217,7 @@ function assertModeAllowed(mode) {
   if (!PROD_MODES_ALLOWED.has(mode)) {
     throw new Error(
       `MAIL_MODE="${mode}" is not permitted when NODE_ENV=production. ` +
-      'Configure SMTP_HOST / SMTP_USER / SMTP_PASSWORD and set MAIL_MODE=smtp.'
+        'Configure SMTP_HOST / SMTP_USER / SMTP_PASSWORD and set MAIL_MODE=smtp.'
     );
   }
 }
@@ -213,36 +227,43 @@ function assertModeAllowed(mode) {
  * SMTP TRANSPORT
  * =====================================================
  *
- * IMPORTANT:
- * `family: 4` forces IPv4.
- *
  * Railway was attempting to connect to Gmail over IPv6:
  *
  *   ENETUNREACH ...:587
  *
- * Force IPv4 to avoid that Railway IPv6 routing issue.
+ * Force IPv4 and force DNS lookup to return IPv4.
+ * =====================================================
  */
 function buildSmtpTransport() {
-  const { host, user, pass } = readSmtpCredentials();
+  const { host, user, pass } =
+    readSmtpCredentials();
 
   const port =
     Number(process.env.SMTP_PORT) || 587;
 
   return nodemailer.createTransport({
     host,
-
     port,
-
     secure: resolveSecure(),
 
-    // Railway -> Gmail SMTP IPv4 fix
+    // Force IPv4.
     family: 4,
+
+    // Force DNS lookup to use IPv4 only.
+    lookup: (hostname, options, callback) => {
+      dns.lookup(
+        hostname,
+        {
+          ...options,
+          family: 4,
+        },
+        callback
+      );
+    },
 
     // Fail fast instead of waiting too long.
     connectionTimeout: SMTP_TIMEOUT_MS,
-
     greetingTimeout: SMTP_TIMEOUT_MS,
-
     socketTimeout: SMTP_TIMEOUT_MS,
 
     requireTLS:
@@ -271,7 +292,8 @@ async function getTransporter() {
    * No usable configuration.
    */
   if (mode === 'disabled') {
-    const { missing } = readSmtpCredentials();
+    const { missing } =
+      readSmtpCredentials();
 
     console.error(
       `[Email] No usable mail transport configured. ${configurationError(
@@ -293,7 +315,7 @@ async function getTransporter() {
   if (mode === 'console') {
     console.warn(
       '[Email] MAIL_MODE=console - NO EMAIL IS SENT. ' +
-      'Every send is reported as a failure.'
+        'Every send is reported as a failure.'
     );
 
     return null;
@@ -316,7 +338,7 @@ async function getTransporter() {
     if (mode === 'ethereal') {
       console.warn(
         '[Email] MAIL_MODE=ethereal - mail is delivered to a ' +
-        'throwaway @ethereal.email sandbox, NOT to the real user inbox.'
+          'throwaway @ethereal.email sandbox, NOT to the real user inbox.'
       );
 
       const testAccount =
@@ -326,7 +348,6 @@ async function getTransporter() {
         host: 'smtp.ethereal.email',
         port: 587,
         secure: false,
-
         auth: {
           user: testAccount.user,
           pass: testAccount.pass,
@@ -337,7 +358,8 @@ async function getTransporter() {
     /**
      * Real SMTP mode.
      */
-    const transport = buildSmtpTransport();
+    const transport =
+      buildSmtpTransport();
 
     /**
      * Verify SMTP connection before sending.
@@ -384,7 +406,7 @@ export async function logEmailDiagnostics() {
 
     console.log(
       '[Email] SMTP transporter verified successfully - ' +
-      'real email delivery is active.'
+        'real email delivery is active.'
     );
   } catch (error) {
     console.error(
@@ -415,7 +437,10 @@ export function getEmailConfigSummary() {
  */
 function testMessageUrl(info) {
   try {
-    return nodemailer.getTestMessageUrl(info) || null;
+    return (
+      nodemailer.getTestMessageUrl(info) ||
+      null
+    );
   } catch {
     return null;
   }
@@ -426,7 +451,10 @@ function testMessageUrl(info) {
  * VERIFICATION EMAIL HTML
  * =====================================================
  */
-function buildVerificationHtml(fullName, otp) {
+function buildVerificationHtml(
+  fullName,
+  otp
+) {
   return `
     <div style="
       font-family: 'Helvetica Neue', Arial, sans-serif;
@@ -437,7 +465,6 @@ function buildVerificationHtml(fullName, otp) {
       border-radius: 12px;
       background: #ffffff;
     ">
-
       <h2 style="
         color: #0f172a;
         margin-top: 0;
@@ -496,7 +523,6 @@ function buildVerificationHtml(fullName, otp) {
         Enter this code on the Velora verification page.
         If you did not create this account, please ignore this email.
       </p>
-
     </div>
   `;
 }
@@ -506,7 +532,10 @@ function buildVerificationHtml(fullName, otp) {
  * PASSWORD RESET HTML
  * =====================================================
  */
-function buildResetHtml(fullName, resetLink) {
+function buildResetHtml(
+  fullName,
+  resetLink
+) {
   return `
     <div style="
       font-family: 'Helvetica Neue', Arial, sans-serif;
@@ -517,7 +546,6 @@ function buildResetHtml(fullName, resetLink) {
       border-radius: 12px;
       background: #ffffff;
     ">
-
       <h2 style="
         color: #0f172a;
         margin-top: 0;
@@ -536,7 +564,6 @@ function buildResetHtml(fullName, resetLink) {
       </p>
 
       <div style="margin: 28px 0;">
-
         <a
           href="${resetLink}"
           style="
@@ -551,7 +578,6 @@ function buildResetHtml(fullName, resetLink) {
         >
           Reset Password
         </a>
-
       </div>
 
       <p style="
@@ -580,7 +606,6 @@ function buildResetHtml(fullName, resetLink) {
         If you did not request a password reset,
         please ignore this email.
       </p>
-
     </div>
   `;
 }
@@ -618,7 +643,7 @@ async function deliver({
   if (mode === 'console') {
     console.warn(
       `[Email] MAIL_MODE=console - ${purpose} email NOT sent to ${to}. ` +
-      'Nothing is delivered anywhere in this mode.'
+        'Nothing is delivered anywhere in this mode.'
     );
 
     /**
@@ -649,7 +674,8 @@ async function deliver({
    * Get SMTP transporter.
    */
   try {
-    transport = await getTransporter();
+    transport =
+      await getTransporter();
   } catch (error) {
     console.error(
       `[Email] Failed to send ${purpose} email: ${error.message}`
@@ -661,7 +687,8 @@ async function deliver({
       previewUrl: null,
       errorCode: 'SMTP_UNAVAILABLE',
       error: error.message,
-      missingConfig: readSmtpCredentials().missing,
+      missingConfig:
+        readSmtpCredentials().missing,
     };
   }
 
@@ -686,13 +713,14 @@ async function deliver({
    * Send actual email.
    */
   try {
-    const info = await transport.sendMail({
-      from: resolvedFrom,
-      to,
-      subject,
-      html,
-      text,
-    });
+    const info =
+      await transport.sendMail({
+        from: resolvedFrom,
+        to,
+        subject,
+        html,
+        text,
+      });
 
     const previewUrl =
       mode === 'ethereal'
@@ -704,9 +732,12 @@ async function deliver({
       {
         to,
         delivery: mode,
-        messageId: info?.messageId || null,
-        accepted: info?.accepted?.length || 0,
-        rejected: info?.rejected?.length || 0,
+        messageId:
+          info?.messageId || null,
+        accepted:
+          info?.accepted?.length || 0,
+        rejected:
+          info?.rejected?.length || 0,
         previewUrl,
       }
     );
@@ -758,7 +789,7 @@ export async function sendVerificationEmail(
   if (!recipient) {
     console.error(
       '[Email] Failed to send verification email: ' +
-      'no recipient address supplied'
+        'no recipient address supplied'
     );
 
     return {
@@ -774,22 +805,17 @@ export async function sendVerificationEmail(
 
   return deliver({
     to: recipient,
-
     subject:
       'Your Velora Email Verification Code',
-
     html: buildVerificationHtml(
       fullName || 'there',
       otp
     ),
-
     text:
       `Your Velora verification code is: ${otp}\n\n` +
       'This code expires in 10 minutes.',
-
     // OTP must never be printed to logs.
     link: null,
-
     purpose: 'verification',
   });
 }
@@ -818,7 +844,7 @@ export async function sendPasswordResetEmail(
   if (!recipient) {
     console.error(
       '[Email] Failed to send password reset email: ' +
-      'no recipient address supplied'
+        'no recipient address supplied'
     );
 
     return {
@@ -833,26 +859,22 @@ export async function sendPasswordResetEmail(
     };
   }
 
-  const result = await deliver({
-    to: recipient,
-
-    subject:
-      'Reset your Velora Account Password',
-
-    html: buildResetHtml(
-      fullName || 'there',
-      resetLink
-    ),
-
-    text:
-      `We received a request to reset your Velora password. ` +
-      `Visit this link to choose a new password: ${resetLink} ` +
-      '(expires in 1 hour)',
-
-    link: resetLink,
-
-    purpose: 'password reset',
-  });
+  const result =
+    await deliver({
+      to: recipient,
+      subject:
+        'Reset your Velora Account Password',
+      html: buildResetHtml(
+        fullName || 'there',
+        resetLink
+      ),
+      text:
+        `We received a request to reset your Velora password. ` +
+        `Visit this link to choose a new password: ${resetLink} ` +
+        '(expires in 1 hour)',
+      link: resetLink,
+      purpose: 'password reset',
+    });
 
   return {
     ...result,
@@ -879,7 +901,6 @@ function buildLoginOtpHtml(
       border-radius: 12px;
       background: #ffffff;
     ">
-
       <h2 style="
         color: #0f172a;
         margin-top: 0;
@@ -938,7 +959,6 @@ function buildLoginOtpHtml(
         If you did not try to sign in to Velora,
         you can ignore this email.
       </p>
-
     </div>
   `;
 }
@@ -959,7 +979,7 @@ export async function sendLoginOtpEmail(
   if (!recipient) {
     console.error(
       '[Email] Failed to send sign-in code email: ' +
-      'no recipient address supplied'
+        'no recipient address supplied'
     );
 
     return {
@@ -975,22 +995,17 @@ export async function sendLoginOtpEmail(
 
   return deliver({
     to: recipient,
-
     subject:
       'Your Velora sign-in code',
-
     html: buildLoginOtpHtml(
       fullName || 'there',
       otp
     ),
-
     text:
       `Your Velora sign-in code is: ${otp}\n\n` +
       'This code expires in 10 minutes and can only be used once.',
-
     // Never log OTP.
     link: null,
-
     purpose: 'sign-in code',
   });
 }
