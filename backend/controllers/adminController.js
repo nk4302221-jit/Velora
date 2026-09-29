@@ -225,7 +225,7 @@ export async function getUsers(req, res) {
       } else {
         conditions.push(
           `p.slug = ?
-           AND s.status = "active"
+           AND s.status = 'active'
            AND s.expiry_time > CURRENT_TIMESTAMP`
         );
 
