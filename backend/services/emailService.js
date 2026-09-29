@@ -4,23 +4,18 @@ import dns from 'node:dns';
 /**
  * =====================================================
  * OUTBOUND MAIL TRANSPORT
+ * =====================================================
  *
- * Delivery modes (MAIL_MODE), resolved once at startup:
+ * Delivery modes:
  *
- *   smtp      Real delivery. Requires SMTP_HOST + SMTP_USER + SMTP_PASSWORD.
- *             This is the ONLY mode allowed when NODE_ENV=production.
+ * smtp      Real email delivery.
+ *           Required in production.
  *
- *   ethereal  Nodemailer's shared sandbox account. Mail is accepted by the
- *             SMTP server but goes to an @ethereal.email address, NOT to the
- *             real user inbox. Development / QA only.
+ * ethereal  Development / QA only.
  *
- *   console   Nothing is sent anywhere. Development / QA only. Every send is
- *             reported back to the caller as a FAILURE (MAIL_CONSOLE_MODE), so
- *             a verification code can never be claimed as "sent" when it was
- *             not, and the code itself is never printed.
+ * console   No email is sent.
  *
- *   disabled  No usable configuration. Every send fails fast and loudly with
- *             SMTP_NOT_CONFIGURED instead of silently pretending to succeed.
+ * disabled  No usable configuration.
  *
  * =====================================================
  */
@@ -31,46 +26,54 @@ let transporterPromise = null;
 let resolvedMode = null;
 let resolvedFrom = null;
 
-// Connection/auth failures must surface as a fast error rather than leaving an
-// HTTP request hanging while the SMTP socket times out.
 const SMTP_TIMEOUT_MS =
   Number(process.env.SMTP_TIMEOUT_MS) || 15000;
 
 /**
  * =====================================================
- * RAILWAY -> GMAIL SMTP IPv4 DNS FIX
+ * SMTP IPv4 RESOLUTION
+ * =====================================================
  *
- * Railway was resolving smtp.gmail.com to an IPv6 address
- * and failing with ENETUNREACH.
+ * Railway was attempting to connect to Gmail through IPv6:
  *
- * Use dns.resolve4() instead of dns.lookup() so that only
- * IPv4 addresses are returned.
+ * ENETUNREACH 2607:f8b0:....
+ *
+ * Therefore we explicitly resolve smtp.gmail.com to IPv4
+ * before creating the Nodemailer transport.
+ *
+ * Nodemailer receives the IPv4 address directly.
+ * TLS still uses smtp.gmail.com as the server name.
  *
  * =====================================================
  */
 
-function ipv4Lookup(hostname, options, callback) {
-  dns.resolve4(hostname, (error, addresses) => {
-    if (error) {
-      callback(error);
-      return;
-    }
+async function resolveSmtpIPv4(host) {
+  const addresses =
+    await dns.promises.resolve4(host);
 
-    if (!addresses || addresses.length === 0) {
-      callback(
-        new Error(`No IPv4 address found for ${hostname}`)
-      );
-      return;
-    }
+  if (
+    !addresses ||
+    addresses.length === 0
+  ) {
+    throw new Error(
+      `No IPv4 address found for SMTP host ${host}`
+    );
+  }
 
-    callback(null, addresses[0], 4);
-  });
+  const ipv4Address = addresses[0];
+
+  console.log(
+    `[Email] SMTP IPv4 resolved: ${host} -> ${ipv4Address}`
+  );
+
+  return ipv4Address;
 }
 
 /**
- * Everything the log is allowed to know about the transport.
- * The password is never read here, so there is no code path
- * that can print it.
+ * Everything the log is allowed to know about
+ * the transport.
+ *
+ * Password is never logged.
  */
 function describeConfig() {
   const user =
@@ -81,18 +84,18 @@ function describeConfig() {
   return {
     mode: resolvedMode,
     host: process.env.SMTP_HOST || null,
-    port: Number(process.env.SMTP_PORT) || 587,
+    port:
+      Number(process.env.SMTP_PORT) || 587,
     secure: resolveSecure(),
 
-    // Only the domain is logged, never the full mailbox.
     authUser: user
       ? maskLocalPart(user)
       : null,
 
     from: resolvedFrom,
 
-    // Variable NAMES only, never values.
-    missing: readSmtpCredentials().missing,
+    missing:
+      readSmtpCredentials().missing,
   };
 }
 
@@ -109,32 +112,39 @@ function resolveSecure() {
     return false;
   }
 
-  return Number(process.env.SMTP_PORT) === 465;
+  return (
+    Number(process.env.SMTP_PORT) === 465
+  );
 }
 
 function maskLocalPart(value) {
-  const at = String(value).indexOf('@');
+  const at =
+    String(value).indexOf('@');
 
   if (at <= 0) {
     return '***';
   }
 
-  return `${'*'.repeat(Math.min(at, 3))}@${String(
-    value
-  ).slice(at + 1)}`;
+  return (
+    `${'*'.repeat(Math.min(at, 3))}` +
+    `@${String(value).slice(at + 1)}`
+  );
 }
 
 function isProduction() {
   return (
-    String(process.env.NODE_ENV || '').toLowerCase() ===
-    'production'
+    String(
+      process.env.NODE_ENV || ''
+    ).toLowerCase() === 'production'
   );
 }
 
 /**
- * Reads the delivery configuration and reports WHICH
- * variables are absent.
+ * =====================================================
+ * SMTP CREDENTIALS
+ * =====================================================
  */
+
 function readSmtpCredentials() {
   const host = (
     process.env.SMTP_HOST || ''
@@ -181,14 +191,18 @@ function readSmtpCredentials() {
     user,
     pass,
     from,
-    complete: missing.length === 0,
+    complete:
+      missing.length === 0,
     missing,
   };
 }
 
 /**
- * Single wording used for configuration failures.
+ * =====================================================
+ * CONFIGURATION ERROR
+ * =====================================================
  */
+
 function configurationError(missing) {
   const list =
     missing && missing.length
@@ -203,8 +217,11 @@ function configurationError(missing) {
 }
 
 /**
- * Resolves delivery mode.
+ * =====================================================
+ * MAIL MODE
+ * =====================================================
  */
+
 function resolveMode() {
   const requested = String(
     process.env.MAIL_MODE || ''
@@ -212,9 +229,12 @@ function resolveMode() {
     .trim()
     .toLowerCase();
 
-  const creds = readSmtpCredentials();
+  const creds =
+    readSmtpCredentials();
 
-  // Complete SMTP credentials always use SMTP.
+  /*
+   * Complete SMTP credentials always use SMTP.
+   */
   if (creds.complete) {
     return 'smtp';
   }
@@ -248,7 +268,9 @@ function assertModeAllowed(mode) {
     return;
   }
 
-  if (!PROD_MODES_ALLOWED.has(mode)) {
+  if (
+    !PROD_MODES_ALLOWED.has(mode)
+  ) {
     throw new Error(
       `MAIL_MODE="${mode}" is not permitted when NODE_ENV=production. ` +
         'Configure SMTP_HOST / SMTP_USER / SMTP_PASSWORD and set MAIL_MODE=smtp.'
@@ -257,36 +279,71 @@ function assertModeAllowed(mode) {
 }
 
 /**
- * Creates the SMTP transport.
+ * =====================================================
+ * BUILD SMTP TRANSPORT
+ * =====================================================
  *
  * IMPORTANT:
- * dns.resolve4() + family: 4 + lookup: ipv4Lookup
- * forces smtp.gmail.com DNS resolution through IPv4.
  *
- * Gmail port 587 uses STARTTLS.
+ * 1. Resolve smtp.gmail.com using resolve4().
+ * 2. Give Nodemailer the IPv4 address directly.
+ * 3. Keep TLS servername as smtp.gmail.com.
+ *
+ * This prevents Railway from attempting:
+ *
+ * 2607:f8b0:....:587
+ *
+ * =====================================================
  */
-function buildSmtpTransport() {
-  const { host, user, pass } =
-    readSmtpCredentials();
+
+async function buildSmtpTransport() {
+  const {
+    host,
+    user,
+    pass,
+  } = readSmtpCredentials();
 
   const port =
     Number(process.env.SMTP_PORT) || 587;
 
-  const secure = resolveSecure();
+  const secure =
+    resolveSecure();
+
+  /*
+   * Resolve SMTP host to IPv4 before
+   * creating the connection.
+   */
+  const ipv4Address =
+    await resolveSmtpIPv4(host);
+
+  /*
+   * Log only the resolved IP.
+   * Never log password.
+   */
+  console.log(
+    `[Email] SMTP connecting via IPv4: ${ipv4Address}:${port}`
+  );
 
   return nodemailer.createTransport({
-    host,
+    /*
+     * IMPORTANT:
+     * Connect directly to IPv4.
+     */
+    host: ipv4Address,
+
     port,
+
     secure,
 
-    // Force IPv4.
-    family: 4,
-    lookup: ipv4Lookup,
-
-    // Gmail port 587 uses STARTTLS.
+    /*
+     * Gmail port 587 uses STARTTLS.
+     */
     requireTLS: !secure,
 
-    // Keep TLS hostname verification against smtp.gmail.com.
+    /*
+     * TLS certificate belongs to smtp.gmail.com,
+     * not the raw IPv4 address.
+     */
     tls: {
       servername: host,
     },
@@ -303,13 +360,19 @@ function buildSmtpTransport() {
 }
 
 /**
- * Builds and validates the transport.
+ * =====================================================
+ * GET / VERIFY TRANSPORT
+ * =====================================================
  */
+
 async function getTransporter() {
-  const mode = resolveMode();
+  const mode =
+    resolveMode();
 
   resolvedMode = mode;
-  resolvedFrom = resolveFromAddress();
+
+  resolvedFrom =
+    resolveFromAddress();
 
   if (mode === 'disabled') {
     const { missing } =
@@ -338,62 +401,96 @@ async function getTransporter() {
     return transporterPromise;
   }
 
-  transporterPromise = (async () => {
-    if (mode === 'ethereal') {
-      console.warn(
-        '[Email] MAIL_MODE=ethereal - mail is delivered to a throwaway @ethereal.email sandbox, NOT to the real user inbox.'
-      );
+  transporterPromise =
+    (async () => {
+      /**
+       * =================================================
+       * ETHEREAL
+       * =================================================
+       */
 
-      const testAccount =
-        await nodemailer.createTestAccount();
+      if (mode === 'ethereal') {
+        console.warn(
+          '[Email] MAIL_MODE=ethereal - mail is delivered to a throwaway @ethereal.email sandbox, NOT to the real user inbox.'
+        );
 
-      return nodemailer.createTransport({
-        host: 'smtp.ethereal.email',
-        port: 587,
-        secure: false,
-        auth: {
-          user: testAccount.user,
-          pass: testAccount.pass,
-        },
-      });
-    }
+        const testAccount =
+          await nodemailer.createTestAccount();
 
-    const transport =
-      buildSmtpTransport();
+        return nodemailer.createTransport({
+          host: 'smtp.ethereal.email',
+          port: 587,
+          secure: false,
 
-    // Verify connection before using it.
-    try {
-      await transport.verify();
-    } catch (error) {
-      // Do not cache a failed transport.
-      transporterPromise = null;
+          auth: {
+            user:
+              testAccount.user,
+            pass:
+              testAccount.pass,
+          },
+        });
+      }
 
-      throw new Error(
-        `SMTP connection failed: ${error.message}`
-      );
-    }
+      /**
+       * =================================================
+       * REAL SMTP
+       * =================================================
+       */
 
-    return transport;
-  })();
+      /*
+       * IMPORTANT:
+       * buildSmtpTransport() is async now.
+       */
+      const transport =
+        await buildSmtpTransport();
+
+      /*
+       * Verify Gmail SMTP connection
+       * before using it.
+       */
+      try {
+        await transport.verify();
+      } catch (error) {
+        /*
+         * Do not cache failed transport.
+         */
+        transporterPromise = null;
+
+        throw new Error(
+          `SMTP connection failed: ${error.message}`
+        );
+      }
+
+      return transport;
+    })();
 
   return transporterPromise;
 }
 
 /**
- * Startup diagnostic.
+ * =====================================================
+ * STARTUP EMAIL DIAGNOSTICS
+ * =====================================================
  */
-export async function logEmailDiagnostics() {
-  resolvedMode = resolveMode();
-  resolvedFrom = resolveFromAddress();
 
-  const summary = describeConfig();
+export async function logEmailDiagnostics() {
+  resolvedMode =
+    resolveMode();
+
+  resolvedFrom =
+    resolveFromAddress();
+
+  const summary =
+    describeConfig();
 
   console.log(
     '[Email] Mail configuration:',
     summary
   );
 
-  if (summary.mode !== 'smtp') {
+  if (
+    summary.mode !== 'smtp'
+  ) {
     return summary;
   }
 
@@ -414,26 +511,44 @@ export async function logEmailDiagnostics() {
 }
 
 /**
- * Exposed for tests / diagnostics.
- * Never returns credentials.
+ * =====================================================
+ * EMAIL CONFIG SUMMARY
+ * =====================================================
  */
+
 export function getEmailConfigSummary() {
-  resolvedMode = resolveMode();
-  resolvedFrom = resolveFromAddress();
+  resolvedMode =
+    resolveMode();
+
+  resolvedFrom =
+    resolveFromAddress();
 
   return describeConfig();
 }
 
+/**
+ * =====================================================
+ * ETHEREAL PREVIEW URL
+ * =====================================================
+ */
+
 function testMessageUrl(info) {
   try {
     return (
-      nodemailer.getTestMessageUrl(info) ||
-      null
+      nodemailer.getTestMessageUrl(
+        info
+      ) || null
     );
   } catch {
     return null;
   }
 }
+
+/**
+ * =====================================================
+ * VERIFICATION EMAIL HTML
+ * =====================================================
+ */
 
 function buildVerificationHtml(
   fullName,
@@ -441,7 +556,10 @@ function buildVerificationHtml(
 ) {
   return `
       <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 28px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
-        <h2 style="color: #0f172a; margin-top: 0;">Welcome to Velora, ${fullName}!</h2>
+
+        <h2 style="color: #0f172a; margin-top: 0;">
+          Welcome to Velora, ${fullName}!
+        </h2>
 
         <p style="color: #475569; font-size: 16px; line-height: 1.6;">
           Thank you for signing up. Please verify your email address to activate your account and start shopping.
@@ -462,9 +580,16 @@ function buildVerificationHtml(
         <p style="color: #94a3b8; font-size: 12px; margin-top: 32px; border-top: 1px solid #f1f5f9; padding-top: 16px;">
           Enter this code on the Velora verification page. If you did not create this account, please ignore this email.
         </p>
+
       </div>
     `;
 }
+
+/**
+ * =====================================================
+ * PASSWORD RESET EMAIL HTML
+ * =====================================================
+ */
 
 function buildResetHtml(
   fullName,
@@ -472,7 +597,10 @@ function buildResetHtml(
 ) {
   return `
       <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 28px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
-        <h2 style="color: #0f172a; margin-top: 0;">Password Reset Request</h2>
+
+        <h2 style="color: #0f172a; margin-top: 0;">
+          Password Reset Request
+        </h2>
 
         <p style="color: #475569; font-size: 16px; line-height: 1.6;">
           Hi ${fullName}, we received a request to reset the password for your Velora account.
@@ -480,30 +608,45 @@ function buildResetHtml(
         </p>
 
         <div style="margin: 28px 0;">
-          <a href="${resetLink}" style="background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 14px 28px; font-weight: 600; border-radius: 8px; display: inline-block;">
+
+          <a
+            href="${resetLink}"
+            style="background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 14px 28px; font-weight: 600; border-radius: 8px; display: inline-block;"
+          >
             Reset Password
           </a>
+
         </div>
 
         <p style="color: #64748b; font-size: 14px;">
+
           Or copy and paste this link in your browser:
+
           <br/>
 
-          <a href="${resetLink}" style="color: #2563eb;">
+          <a
+            href="${resetLink}"
+            style="color: #2563eb;"
+          >
             ${resetLink}
           </a>
+
         </p>
 
         <p style="color: #94a3b8; font-size: 12px; margin-top: 32px; border-top: 1px solid #f1f5f9; padding-top: 16px;">
           This link will expire in 1 hour. If you did not request a password reset, please ignore this email.
         </p>
+
       </div>
     `;
 }
 
 /**
- * Single funnel for every outbound message.
+ * =====================================================
+ * SINGLE EMAIL DELIVERY FUNNEL
+ * =====================================================
  */
+
 async function deliver({
   to,
   subject,
@@ -512,19 +655,30 @@ async function deliver({
   link,
   purpose,
 }) {
-  const mode = resolveMode();
+  const mode =
+    resolveMode();
 
-  resolvedMode = mode;
-  resolvedFrom = resolveFromAddress();
+  resolvedMode =
+    mode;
+
+  resolvedFrom =
+    resolveFromAddress();
 
   console.log(
     `[Email] Preparing ${purpose} email`,
     {
       to,
       subject,
-      transport: describeConfig(),
+      transport:
+        describeConfig(),
     }
   );
+
+  /**
+   * =================================================
+   * CONSOLE MODE
+   * =================================================
+   */
 
   if (mode === 'console') {
     console.warn(
@@ -533,21 +687,32 @@ async function deliver({
     );
 
     if (link) {
-      console.warn(`        ${link}`);
+      console.warn(
+        `        ${link}`
+      );
     }
 
     return {
       success: false,
       delivery: 'console',
       previewUrl: null,
-      errorCode: 'MAIL_CONSOLE_MODE',
+      errorCode:
+        'MAIL_CONSOLE_MODE',
+
       error:
         'MAIL_MODE=console is active, so no email is delivered. Configure SMTP_HOST / SMTP_USER / SMTP_PASSWORD / SMTP_FROM for real delivery.',
+
       missingConfig: [],
     };
   }
 
   let transport;
+
+  /**
+   * =================================================
+   * GET TRANSPORT
+   * =================================================
+   */
 
   try {
     transport =
@@ -561,12 +726,23 @@ async function deliver({
       success: false,
       delivery: mode,
       previewUrl: null,
-      errorCode: 'SMTP_UNAVAILABLE',
-      error: error.message,
+      errorCode:
+        'SMTP_UNAVAILABLE',
+
+      error:
+        error.message,
+
       missingConfig:
-        readSmtpCredentials().missing,
+        readSmtpCredentials()
+          .missing,
     };
   }
+
+  /**
+   * =================================================
+   * NO TRANSPORT
+   * =================================================
+   */
 
   if (!transport) {
     const { missing } =
@@ -576,11 +752,24 @@ async function deliver({
       success: false,
       delivery: 'disabled',
       previewUrl: null,
-      errorCode: 'SMTP_NOT_CONFIGURED',
-      error: configurationError(missing),
-      missingConfig: missing,
+      errorCode:
+        'SMTP_NOT_CONFIGURED',
+
+      error:
+        configurationError(
+          missing
+        ),
+
+      missingConfig:
+        missing,
     };
   }
+
+  /**
+   * =================================================
+   * SEND EMAIL
+   * =================================================
+   */
 
   try {
     const info =
@@ -602,12 +791,19 @@ async function deliver({
       {
         to,
         delivery: mode,
+
         messageId:
-          info?.messageId || null,
+          info?.messageId ||
+          null,
+
         accepted:
-          info?.accepted?.length || 0,
+          info?.accepted?.length ||
+          0,
+
         rejected:
-          info?.rejected?.length || 0,
+          info?.rejected?.length ||
+          0,
+
         previewUrl,
       }
     );
@@ -625,8 +821,14 @@ async function deliver({
       `[Email] Failed to send ${purpose} email: ${error.message}`,
       {
         to,
-        code: error?.code || null,
-        command: error?.command || null,
+
+        code:
+          error?.code ||
+          null,
+
+        command:
+          error?.command ||
+          null,
       }
     );
 
@@ -634,26 +836,34 @@ async function deliver({
       success: false,
       delivery: mode,
       previewUrl: null,
+
       errorCode:
         error?.code ||
         'SMTP_SEND_FAILED',
-      error: error.message,
+
+      error:
+        error.message,
+
       missingConfig: [],
     };
   }
 }
 
 /**
- * Sends account verification email containing
- * the 6-digit code.
+ * =====================================================
+ * VERIFICATION OTP EMAIL
+ * =====================================================
  */
+
 export async function sendVerificationEmail(
   toEmail,
   fullName,
   otp
 ) {
   const recipient =
-    String(toEmail || '').trim();
+    String(
+      toEmail || ''
+    ).trim();
 
   if (!recipient) {
     console.error(
@@ -664,9 +874,12 @@ export async function sendVerificationEmail(
       success: false,
       delivery: 'disabled',
       previewUrl: null,
-      errorCode: 'NO_RECIPIENT',
+      errorCode:
+        'NO_RECIPIENT',
+
       error:
         'A recipient email address is required',
+
       missingConfig: [],
     };
   }
@@ -677,10 +890,11 @@ export async function sendVerificationEmail(
     subject:
       'Your Velora Email Verification Code',
 
-    html: buildVerificationHtml(
-      fullName || 'there',
-      otp
-    ),
+    html:
+      buildVerificationHtml(
+        fullName || 'there',
+        otp
+      ),
 
     text:
       `Your Velora verification code is: ${otp}\n\n` +
@@ -688,9 +902,16 @@ export async function sendVerificationEmail(
 
     link: null,
 
-    purpose: 'verification',
+    purpose:
+      'verification',
   });
 }
+
+/**
+ * =====================================================
+ * PASSWORD RESET EMAIL
+ * =====================================================
+ */
 
 export async function sendPasswordResetEmail(
   toEmail,
@@ -698,7 +919,9 @@ export async function sendPasswordResetEmail(
   resetToken
 ) {
   const recipient =
-    String(toEmail || '').trim();
+    String(
+      toEmail || ''
+    ).trim();
 
   const clientUrl =
     process.env.CLIENT_URL ||
@@ -706,7 +929,9 @@ export async function sendPasswordResetEmail(
 
   const resetLink =
     `${clientUrl}/reset-password?token=` +
-    encodeURIComponent(resetToken);
+    encodeURIComponent(
+      resetToken
+    );
 
   if (!recipient) {
     console.error(
@@ -717,10 +942,14 @@ export async function sendPasswordResetEmail(
       success: false,
       delivery: 'disabled',
       previewUrl: null,
-      errorCode: 'NO_RECIPIENT',
+      errorCode:
+        'NO_RECIPIENT',
+
       error:
         'A recipient email address is required',
+
       missingConfig: [],
+
       resetLink,
     };
   }
@@ -732,19 +961,22 @@ export async function sendPasswordResetEmail(
       subject:
         'Reset your Velora Account Password',
 
-      html: buildResetHtml(
-        fullName || 'there',
-        resetLink
-      ),
+      html:
+        buildResetHtml(
+          fullName || 'there',
+          resetLink
+        ),
 
       text:
         `We received a request to reset your Velora password. ` +
         `Visit this link to choose a new password: ${resetLink} ` +
         `(expires in 1 hour)`,
 
-      link: resetLink,
+      link:
+        resetLink,
 
-      purpose: 'password reset',
+      purpose:
+        'password reset',
     });
 
   return {
@@ -753,9 +985,11 @@ export async function sendPasswordResetEmail(
   };
 }
 
-// =====================================================
-// SIGN-IN CODE (OTP LOGIN)
-// =====================================================
+/**
+ * =====================================================
+ * SIGN-IN CODE (OTP LOGIN)
+ * =====================================================
+ */
 
 function buildLoginOtpHtml(
   fullName,
@@ -794,15 +1028,20 @@ function buildLoginOtpHtml(
 }
 
 /**
- * Sends the 6-digit sign-in code.
+ * =====================================================
+ * SIGN-IN OTP EMAIL
+ * =====================================================
  */
+
 export async function sendLoginOtpEmail(
   toEmail,
   fullName,
   otp
 ) {
   const recipient =
-    String(toEmail || '').trim();
+    String(
+      toEmail || ''
+    ).trim();
 
   if (!recipient) {
     console.error(
@@ -813,9 +1052,12 @@ export async function sendLoginOtpEmail(
       success: false,
       delivery: 'disabled',
       previewUrl: null,
-      errorCode: 'NO_RECIPIENT',
+      errorCode:
+        'NO_RECIPIENT',
+
       error:
         'A recipient email address is required',
+
       missingConfig: [],
     };
   }
@@ -826,10 +1068,11 @@ export async function sendLoginOtpEmail(
     subject:
       'Your Velora sign-in code',
 
-    html: buildLoginOtpHtml(
-      fullName || 'there',
-      otp
-    ),
+    html:
+      buildLoginOtpHtml(
+        fullName || 'there',
+        otp
+      ),
 
     text:
       `Your Velora sign-in code is: ${otp}\n\n` +
@@ -837,6 +1080,7 @@ export async function sendLoginOtpEmail(
 
     link: null,
 
-    purpose: 'sign-in code',
+    purpose:
+      'sign-in code',
   });
 }
