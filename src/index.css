@@ -1698,12 +1698,26 @@ h6 {
 
 .admin-content {
   min-width: 0;
-
+  height: 100vh;
   padding: 32px;
-
   background: var(--bg-app);
-
+  overflow-x: hidden;
   overflow-y: auto;
+  box-sizing: border-box;
+}
+
+/* Portal navigation and content must never create horizontal overflow. */
+.portal-mobile-toggle {
+  display: none;
+}
+
+.portal-nav .admin-nav-link {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.admin-content .table {
+  min-width: 760px;
 }
 
 .stat-cards-grid {
@@ -2466,56 +2480,49 @@ h6 {
       1fr;
   }
 
+  /* Keep the portal rail vertical on laptop/tablet widths. The previous
+     row/wrap layout made sidebar links appear in two columns around 1024px. */
   .admin-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: 240px minmax(0, 1fr);
   }
 
   .admin-sidebar {
-    width: 100%;
-
-    flex-direction: row;
-
-    flex-wrap: wrap;
-
-    align-items: center;
-
-    /* Once the rail stops being a side column it must stop being a
-       100vh sticky block, or it pushes the content a full screen down. */
-    position: static;
-
-    height: auto;
-
-    max-height: none;
-
-    overflow-y: visible;
+    width: auto;
+    min-width: 240px;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    max-height: 100vh;
+    overflow-x: hidden;
+    overflow-y: auto;
   }
 
-  /* The sidebar is a row here, so the link list inside it has to be a row
-     too - a column next to a row wraps to its own full-width line. */
   .portal-nav {
-    flex-direction: row;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    width: 100%;
+    flex: 0 0 auto;
+    margin-top: 8px;
+  }
 
-    flex-wrap: wrap;
-
-    flex: 1 1 auto;
-
-    margin-top: 0;
+  .portal-nav .admin-nav-link {
+    width: 100%;
+    min-width: 0;
   }
 
   .portal-sidebar-head {
-    flex: 1 1 100%;
-
-    margin-bottom: 0;
+    flex: 0 0 auto;
+    margin-bottom: 20px;
   }
 
   .portal-sidebar-foot {
-    margin-top: 0;
-
-    padding-top: 0;
-
-    flex-direction: row;
-
-    align-items: center;
+    margin-top: auto;
+    padding-top: 24px;
+    flex-direction: column;
+    align-items: stretch;
   }
 }
 
@@ -3081,18 +3088,52 @@ h6 {
 
   .admin-sidebar {
     width: 100%;
-
+    min-width: 0;
     padding: 14px 10px;
-
     flex-direction: column;
+    position: static;
+    height: auto;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .portal-mobile-toggle {
+    display: flex !important;
+    width: 100%;
+    justify-content: flex-start;
+    margin-top: 4px;
+  }
+
+  .portal-nav {
+    display: none;
+    width: 100%;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    margin-top: 6px;
+  }
+
+  .portal-nav.is-open {
+    display: flex;
+  }
+
+  .portal-nav .admin-nav-link {
+    width: 100%;
+    white-space: normal;
+  }
+
+  .portal-sidebar-foot {
+    margin-top: 12px;
+    padding-top: 12px;
   }
 
   .admin-content {
     width: 100%;
-
     min-width: 0;
-
+    height: auto;
     padding: 16px;
+    overflow-x: hidden;
+    overflow-y: visible;
+    box-sizing: border-box;
   }
 
   .stat-cards-grid {

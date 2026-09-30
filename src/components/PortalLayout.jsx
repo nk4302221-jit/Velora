@@ -31,7 +31,8 @@ export const PortalLayout = ({
 
   // Hide entries the signed-in role does not hold.
   const visibleItems = navItems.filter(
-    (item) => !item.permission || hasPermission(user?.role, item.permission)
+    (item) =>
+      !item.permission || hasPermission(user?.role, item.permission)
   );
 
   const handleLogout = async () => {
@@ -64,38 +65,52 @@ export const PortalLayout = ({
             style={{
               background: accentColor,
               color: '#fff',
-              marginBottom: 10,
+              marginBottom: '10px',
             }}
           >
             {roleLabel(user?.role)}
           </div>
 
-          <h2 className="portal-sidebar-title">{portalTitle}</h2>
+          <h2 className="portal-sidebar-title">
+            {portalTitle}
+          </h2>
 
-          <p className="portal-sidebar-subtitle">{portalSubtitle}</p>
+          <p className="portal-sidebar-subtitle">
+            {portalSubtitle}
+          </p>
 
-          <p className="portal-sidebar-email">{user?.email}</p>
+          <p className="portal-sidebar-email">
+            {user?.email}
+          </p>
         </div>
 
+        {/* Mobile menu button */}
         <button
           type="button"
-          className="admin-nav-link"
-          onClick={() => setMobileNavOpen((prev) => !prev)}
-          style={{
-            background: '#1e293b',
-            color: '#fff',
-            border: 'none',
-            cursor: 'pointer',
-            display: 'none',
-          }}
+          className="admin-nav-link portal-mobile-toggle"
+          onClick={() =>
+            setMobileNavOpen((prev) => !prev)
+          }
           aria-expanded={mobileNavOpen}
           aria-label="Toggle portal navigation"
         >
-          {mobileNavOpen ? <X size={18} /> : <Menu size={18} />}
-          Menu
+          {mobileNavOpen ? (
+            <X size={18} />
+          ) : (
+            <Menu size={18} />
+          )}
+
+          <span>
+            {mobileNavOpen ? 'Close Menu' : 'Menu'}
+          </span>
         </button>
 
-        <nav className="portal-nav">
+        {/* Navigation */}
+        <nav
+          className={`portal-nav${
+            mobileNavOpen ? ' is-open' : ''
+          }`}
+        >
           {visibleItems.map((item) => {
             const Icon = item.icon;
 
@@ -108,22 +123,27 @@ export const PortalLayout = ({
                 onClick={() => setMobileNavOpen(false)}
               >
                 {Icon ? <Icon size={18} /> : null}
-                {item.label}
+
+                <span>{item.label}</span>
+
                 {item.badge ? (
-                  <span className="nav-badge-count">{item.badge}</span>
+                  <span className="nav-badge-count">
+                    {item.badge}
+                  </span>
                 ) : null}
               </Link>
             );
           })}
         </nav>
 
+        {/* Sidebar footer */}
         <div className="portal-sidebar-foot">
           <Link
-            to="/"
+            to={homePath || '/'}
             className="admin-nav-link portal-nav-link-sm"
           >
             <ExternalLink size={16} />
-            View Storefront
+            <span>View Storefront</span>
           </Link>
 
           <button
@@ -134,13 +154,21 @@ export const PortalLayout = ({
             data-testid="portal-logout-btn"
           >
             <LogOut size={18} />
-            {loggingOut ? 'Signing out...' : 'Sign Out'}
+
+            <span>
+              {loggingOut
+                ? 'Signing out...'
+                : 'Sign Out'}
+            </span>
           </button>
         </div>
       </aside>
 
       {/* ---------- Content ---------- */}
-      <main className="admin-content" style={{ minWidth: 0 }}>
+      <main
+        className="admin-content"
+        style={{ minWidth: 0 }}
+      >
         {children}
       </main>
     </div>
