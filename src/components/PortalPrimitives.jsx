@@ -33,7 +33,7 @@ export const ErrorState = ({ message, onRetry }) => (
     data-testid="error-state"
   >
     <AlertCircle size={30} color="#dc2626" />
-    <p style={{ color: 'var(--text-muted)', maxWidth: 520 }}>{message}</p>
+    <p style={{ color: 'var(--text-muted)', maxWidth: 520, overflowWrap: 'anywhere' }}>{message}</p>
     {onRetry ? (
       <button type="button" className="btn btn-secondary btn-sm" onClick={onRetry}>
         Try again
@@ -62,52 +62,28 @@ export const EmptyState = ({ message, icon: Icon = Inbox }) => (
 
 /** Page header used at the top of each portal section. */
 export const PageHeader = ({ title, subtitle, actions }) => (
-  <div
-    style={{
-      display: 'flex',
-      alignItems: 'flex-start',
-      justifyContent: 'space-between',
-      gap: 16,
-      flexWrap: 'wrap',
-      marginBottom: 24,
-    }}
-  >
-    <div>
-      <h1 style={{ fontSize: 26, marginBottom: 4 }}>{title}</h1>
+  <div className="page-header">
+    <div className="page-header-text">
+      <h1 className="page-header-title">{title}</h1>
       {subtitle ? (
-        <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>{subtitle}</p>
+        <p className="page-header-subtitle">{subtitle}</p>
       ) : null}
     </div>
-    {actions ? <div style={{ display: 'flex', gap: 8 }}>{actions}</div> : null}
+    {actions ? <div className="page-header-actions">{actions}</div> : null}
   </div>
 );
 
 /** One metric tile in a .stat-cards-grid. */
 export const StatCard = ({ label, value, hint, icon: Icon }) => (
   <div className="stat-card">
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 8,
-      }}
-    >
-      <div className="stat-card-label" style={{ marginBottom: 0 }}>
-        {label}
-      </div>
+    <div className="stat-card-top">
+      <div className="stat-card-label">{label}</div>
       {Icon ? <Icon size={18} color="var(--text-muted)" /> : null}
     </div>
 
-    <div className="stat-card-value" style={{ marginTop: 8 }}>
-      {value}
-    </div>
+    <div className="stat-card-value">{value}</div>
 
-    {hint ? (
-      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-        {hint}
-      </div>
-    ) : null}
+    {hint ? <div className="stat-card-hint">{hint}</div> : null}
   </div>
 );
 

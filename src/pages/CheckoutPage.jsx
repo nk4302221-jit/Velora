@@ -706,14 +706,7 @@ export const CheckoutPage = () => {
         and instant Razorpay payment
       </p>
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '1.4fr 1fr',
-          gap: '40px',
-          alignItems: 'flex-start',
-        }}
-      >
+      <div className="checkout-layout">
         {/* ==================================================
             LEFT COLUMN
         ================================================== */}
@@ -726,7 +719,6 @@ export const CheckoutPage = () => {
           <div
             className="card"
             style={{
-              padding: '24px',
               marginBottom: '28px',
             }}
             id="checkout-address-section"
@@ -1050,14 +1042,7 @@ export const CheckoutPage = () => {
                 </div>
 
                 {/* City / State / PIN */}
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns:
-                      '1fr 1fr 1fr',
-                    gap: '12px',
-                  }}
-                >
+                <div className="form-row-3">
                   {/* City */}
                   <div className="form-group">
                     <label className="form-label">
@@ -1178,9 +1163,6 @@ export const CheckoutPage = () => {
 
           <div
             className="card"
-            style={{
-              padding: '24px',
-            }}
             id="checkout-payment-section"
           >
             <h2

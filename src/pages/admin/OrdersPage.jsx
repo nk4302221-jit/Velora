@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ShoppingBag, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ShoppingBag, Search, ChevronLeft, ChevronRight, Settings } from 'lucide-react';
 
 import api from '../../api/client';
 import { useToast } from '../../context/ToastContext';
@@ -195,6 +196,7 @@ const Orders = () => {
                     <th>Payment</th>
                     <th style={{ width: 170 }}>Order Status</th>
                     <th>Placed</th>
+                    <th style={{ width: 110 }}>Manage</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -264,6 +266,16 @@ const Orders = () => {
                         {order.created_at
                           ? new Date(order.created_at).toLocaleDateString()
                           : '-'}
+                      </td>
+
+                      <td>
+                        <Link
+                          to={`/orders/${order.id}`}
+                          className="btn btn-secondary btn-sm"
+                          aria-label={`Manage order ${order.order_number || order.id}`}
+                        >
+                          <Settings size={15} /> Manage
+                        </Link>
                       </td>
                     </tr>
                   ))}

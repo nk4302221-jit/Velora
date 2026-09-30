@@ -1,5 +1,6 @@
 import { executeQuery } from '../config/db.js';
 import { successResponse, errorResponse } from '../utils/responseHelper.js';
+import { isAdminRole } from '../utils/roleHelper.js';
 import { createCheckoutSession } from '../services/stripeService.js';
 import { createRazorpayOrder, verifyRazorpaySignature } from '../services/razorpayService.js';
 import { createPendingOrder, OrderServiceError, deductStockForItems } from '../services/orderService.js';
@@ -304,14 +305,18 @@ export async function getOrderById(req, res) {
     const userId = req.user.id;
     const { id } = req.params;
 
+    // admin + super_admin may open any order; a customer may only ever open
+    // their own. Customer authorization is unchanged.
+    const canViewAnyOrder = isAdminRole(req.user.role);
+
     const orders = await executeQuery(
       `SELECT o.*, 
               a.full_name as shipping_name, a.phone as shipping_phone,
               a.address_line1, a.address_line2, a.city, a.state, a.country, a.postal_code
        FROM orders o
        LEFT JOIN addresses a ON a.id = o.address_id
-       WHERE o.id = ? AND (o.user_id = ? OR ? = 'admin')`,
-      [id, userId, req.user.role]
+       WHERE o.id = ?${canViewAnyOrder ? '' : ' AND o.user_id = ?'}`,
+      canViewAnyOrder ? [id] : [id, userId]
     );
 
     if (orders.length === 0) {

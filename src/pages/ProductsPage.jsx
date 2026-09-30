@@ -260,10 +260,7 @@ export const ProductsPage = () => {
           }}
         >
           <div
-            style={{
-              position: 'relative',
-              flex: 1,
-            }}
+            className="catalog-search-wrap"
           >
             <input
               type="text"
@@ -301,24 +298,12 @@ export const ProductsPage = () => {
       {/* =====================================================
           MAIN CONTENT
       ===================================================== */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: '260px 1fr',
-          gap: '32px',
-          alignItems: 'flex-start',
-        }}
-      >
+      <div className="catalog-layout">
         {/* =====================================================
             FILTER SIDEBAR
         ===================================================== */}
         <aside
-          className="card"
-          style={{
-            padding: '20px',
-            position: 'sticky',
-            top: '90px',
-          }}
+          className="card catalog-sidebar"
           id="catalog-filter-sidebar"
         >
           <div

@@ -86,7 +86,9 @@ export const Navbar = () => {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '12px',
+            flexWrap: 'wrap',
+            columnGap: '12px',
+            rowGap: '4px',
             fontWeight: 600,
           }}
           id="active-membership-bar"
@@ -109,7 +111,7 @@ export const Navbar = () => {
           >
             <Clock size={11} /> {timeLeft} left
           </span>
-          <Link to="/plans" style={{ textDecoration: 'underline', color: '#fef08a' }}>
+          <Link to="/plans" style={{ textDecoration: 'underline', color: '#fef08a', whiteSpace: 'nowrap' }}>
             Upgrade / Extend
           </Link>
         </div>
@@ -322,7 +324,7 @@ export const Navbar = () => {
                   )}
                 </div>
               ) : (
-                <div style={{ display: 'flex', gap: '8px' }}>
+                <div className="nav-auth-actions">
                   <Link to="/login" className="btn btn-secondary btn-sm" id="nav-login-btn">
                     Sign In
                   </Link>

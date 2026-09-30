@@ -50,7 +50,7 @@ export const CartPage = () => {
 
   return (
     <div className="site-wrapper" style={{ margin: '36px auto 60px' }} id="cart-page-container">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px' }}>
+      <div className="page-heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', flexWrap: 'wrap', marginBottom: '28px' }}>
         <div>
           <h1 style={{ fontSize: '28px', marginBottom: '4px' }}>Shopping Cart</h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
@@ -79,12 +79,12 @@ export const CartPage = () => {
             return (
               <div key={item.item_id} className="cart-item-row" id={`cart-row-${item.item_id}`}>
                 {/* Thumbnail */}
-                <Link to={`/products/${item.product_id}`}>
+                <Link to={`/products/${item.product_id}`} className="cart-item-thumb-link">
                   <img src={item.product_image} alt={item.name} className="cart-item-thumb" />
                 </Link>
 
                 {/* Details */}
-                <div>
+                <div className="cart-item-details">
                   <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase' }}>
                     {item.brand}
                   </span>
@@ -133,13 +133,14 @@ export const CartPage = () => {
                 </div>
 
                 {/* Line Total */}
-                <div style={{ fontWeight: 700, fontSize: '16px', minWidth: '80px', textAlign: 'right' }}>
+                <div className="cart-item-total" style={{ fontWeight: 700, fontSize: '16px', minWidth: '80px', textAlign: 'right' }}>
                   ${lineTotal.toFixed(2)}
                 </div>
 
                 {/* Delete Button */}
                 <button
                   type="button"
+                  className="cart-item-remove"
                   onClick={() => removeFromCart(item.item_id)}
                   style={{ color: 'var(--text-light)', padding: '6px' }}
                   title="Remove from cart"

@@ -232,7 +232,7 @@ export const ProfilePage = () => {
       </p>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: '12px', borderBottom: '1px solid var(--border-color)', marginBottom: '32px' }}>
+      <div className="tab-strip">
         <button
           onClick={() => setActiveTab('details')}
           style={{
@@ -244,6 +244,7 @@ export const ProfilePage = () => {
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
+            whiteSpace: 'nowrap',
           }}
           id="tab-profile-details"
         >
@@ -261,6 +262,7 @@ export const ProfilePage = () => {
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
+            whiteSpace: 'nowrap',
           }}
           id="tab-profile-addresses"
         >
@@ -278,6 +280,7 @@ export const ProfilePage = () => {
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
+            whiteSpace: 'nowrap',
           }}
           id="tab-profile-security"
         >
@@ -287,7 +290,7 @@ export const ProfilePage = () => {
 
       {/* Tab 1: Personal Details & Storj Avatar */}
       {activeTab === 'details' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '36px', alignItems: 'flex-start' }}>
+        <div className="profile-layout">
           {/* Details Form */}
           <div className="card" style={{ padding: '28px' }}>
             <h2 style={{ fontSize: '18px', marginBottom: '20px' }}>Personal Profile</h2>
@@ -533,7 +536,7 @@ export const ProfilePage = () => {
           )}
 
           {/* Addresses Grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
+          <div className="profile-address-grid">
             {addresses.map((addr) => (
               <div key={addr.id} className="card" style={{ padding: '20px' }} id={`profile-addr-${addr.id}`}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>

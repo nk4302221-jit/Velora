@@ -31,6 +31,10 @@
   --bg-app: #f8fafc;
   --bg-card: #ffffff;
   --bg-surface: #f1f5f9;
+  /* Alias for --bg-surface. Several surfaces (image placeholders, bar-chart
+     tracks, code chips) reference --bg-light; without it the declaration is
+     invalid at computed-value time and the background renders transparent. */
+  --bg-light: #f1f5f9;
 
   --text-main: #0f172a;
   --text-muted: #64748b;
@@ -178,6 +182,27 @@ textarea {
   flex: 1;
   width: 100%;
   min-width: 0;
+}
+
+
+/* ============================================================
+   UTILITIES
+   ============================================================ */
+
+/* Referenced by the shared <LoadingState> spinner (components/PortalPrimitives).
+   Without this rule the Loader2 icon renders completely static. */
+.spin {
+  animation: velora-spin 1s linear infinite;
+}
+
+@keyframes velora-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 
@@ -359,6 +384,9 @@ h6 {
   font-weight: 600;
 
   text-transform: capitalize;
+
+  /* A wrapped badge breaks the row alignment of whatever it sits in. */
+  white-space: nowrap;
 }
 
 .badge-primary {
@@ -467,6 +495,13 @@ h6 {
   box-shadow: var(--shadow-sm);
 
   transition: box-shadow var(--transition-normal);
+
+  /* Long unbroken values (order numbers, payment ids, URLs, addresses) are
+     common inside cards. `anywhere` only breaks a word that cannot fit on a
+     line by itself, so ordinary prose is unaffected - but it also shrinks the
+     min-content width, which is what stops a flex/grid child from forcing
+     horizontal overflow. */
+  overflow-wrap: anywhere;
 }
 
 .card:hover {
@@ -649,6 +684,12 @@ h6 {
   gap: 14px;
 
   flex-shrink: 0;
+}
+
+.nav-auth-actions {
+  display: flex;
+
+  gap: 8px;
 }
 
 .nav-action-btn {
@@ -1403,6 +1444,11 @@ h6 {
   border-bottom: none;
 }
 
+.cart-item-details {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .cart-item-thumb {
   width: 80px;
   height: 80px;
@@ -1516,8 +1562,9 @@ h6 {
 
   width: 100%;
 
-  min-height:
-    calc(100vh - 70px);
+  /* The portals render without the storefront navbar, so there is no 70px
+     header to subtract here. */
+  min-height: 100vh;
 }
 
 .admin-sidebar {
@@ -1534,9 +1581,21 @@ h6 {
   gap: 8px;
 
   min-width: 0;
+
+  /* Sticky full-height rail. Lives here rather than as an inline style so the
+     responsive blocks below can actually reset it. */
+  position: sticky;
+
+  top: 0;
+
+  height: 100vh;
+
+  overflow-y: auto;
 }
 
 .admin-nav-link {
+  position: relative;
+
   display: flex;
 
   align-items: center;
@@ -1561,6 +1620,80 @@ h6 {
   background: #1e293b;
 
   color: #ffffff;
+}
+
+.portal-sidebar-head {
+  margin-bottom: 20px;
+
+  min-width: 0;
+}
+
+.portal-sidebar-title {
+  color: #ffffff;
+
+  font-size: 17px;
+
+  font-weight: 800;
+
+  margin-bottom: 4px;
+}
+
+.portal-sidebar-subtitle {
+  color: #94a3b8;
+
+  font-size: 12px;
+}
+
+.portal-sidebar-email {
+  color: #64748b;
+
+  font-size: 11px;
+
+  margin-top: 10px;
+
+  word-break: break-all;
+}
+
+.portal-nav {
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 4px;
+
+  margin-top: 8px;
+
+  min-width: 0;
+}
+
+.portal-nav-link-sm {
+  font-size: 13px;
+}
+
+.portal-sidebar-foot {
+  margin-top: auto;
+
+  padding-top: 24px;
+
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 8px;
+}
+
+.portal-logout {
+  color: #f87171;
+
+  font-size: 14px;
+
+  text-align: left;
+}
+
+.portal-logout:disabled {
+  cursor: not-allowed;
+
+  opacity: 0.6;
 }
 
 .admin-content {
@@ -1621,6 +1754,242 @@ h6 {
   overflow-wrap: break-word;
 }
 
+.stat-card-top {
+  display: flex;
+
+  align-items: center;
+
+  justify-content: space-between;
+
+  gap: 8px;
+}
+
+.stat-card-top .stat-card-label {
+  margin-bottom: 0;
+}
+
+.stat-card-value {
+  margin-top: 8px;
+}
+
+.stat-card-hint {
+  font-size: 12px;
+
+  color: var(--text-muted);
+
+  margin-top: 4px;
+}
+
+
+.catalog-layout {
+  display: grid;
+
+  grid-template-columns:
+    260px
+    minmax(0, 1fr);
+
+  gap: 32px;
+
+  align-items: flex-start;
+}
+
+.catalog-sidebar {
+  padding: 20px;
+
+  position: sticky;
+
+  top: 90px;
+}
+
+.catalog-search-wrap {
+  position: relative;
+
+  flex: 1;
+
+  min-width: 0;
+}
+
+/* Room for the absolutely positioned search icon, which otherwise sits on
+   top of the end of the placeholder / value. */
+.catalog-search-wrap .form-control {
+  padding-right: 38px;
+}
+
+.checkout-layout {
+  display: grid;
+
+  grid-template-columns:
+    minmax(0, 1.4fr)
+    minmax(0, 1fr);
+
+  gap: 40px;
+
+  align-items: flex-start;
+}
+
+.form-row-2 {
+  display: grid;
+
+  grid-template-columns:
+    repeat(auto-fit, minmax(160px, 1fr));
+
+  gap: 16px;
+}
+
+.form-row-3 {
+  display: grid;
+
+  grid-template-columns:
+    repeat(auto-fit, minmax(120px, 1fr));
+
+  gap: 12px;
+}
+
+.profile-layout {
+  display: grid;
+
+  grid-template-columns:
+    minmax(0, 1.2fr)
+    minmax(0, 1fr);
+
+  gap: 36px;
+
+  align-items: flex-start;
+}
+
+/* `minmax(320px, 1fr)` forces a 320px track, which is wider than the ~280px
+   of content box a 320px phone has left after the page gutters, so the last
+   column was pushed off-screen. Clamping the floor with `min()` keeps the
+   auto-fit behaviour on desktop without overflowing on a phone. */
+.profile-address-grid {
+  display: grid;
+
+  grid-template-columns:
+    repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+
+  gap: 20px;
+}
+
+.tab-strip {
+  display: flex;
+
+  gap: 12px;
+
+  flex-wrap: wrap;
+
+  border-bottom: 1px solid var(--border-color);
+
+  margin-bottom: 32px;
+}
+
+.order-details-layout {
+  display: grid;
+
+  grid-template-columns:
+    minmax(0, 1.4fr)
+    minmax(0, 1fr);
+
+  gap: 32px;
+}
+
+.order-details-layout .card {
+  padding: 24px;
+}
+
+/* Shipment tracker: 5 equal columns joined by a horizontal rule. */
+.order-timeline {
+  display: flex;
+
+  justify-content: space-between;
+
+  position: relative;
+}
+
+.order-timeline-connector {
+  position: absolute;
+
+  top: 20px;
+
+  left: 5%;
+
+  right: 5%;
+
+  height: 3px;
+
+  background: var(--border-color);
+
+  z-index: 1;
+}
+
+.order-timeline-step {
+  display: flex;
+
+  flex-direction: column;
+
+  align-items: center;
+
+  z-index: 2;
+
+  width: var(--step-share);
+
+  text-align: center;
+}
+
+.order-timeline-dot {
+  flex-shrink: 0;
+
+  margin-bottom: 10px;
+}
+
+.order-timeline-label {
+  min-width: 0;
+
+  overflow-wrap: anywhere;
+}
+
+
+/* ============================================================
+   PAGE HEADER
+   ============================================================ */
+
+.page-header {
+  display: flex;
+
+  align-items: flex-start;
+
+  justify-content: space-between;
+
+  gap: 16px;
+
+  flex-wrap: wrap;
+
+  margin-bottom: 24px;
+}
+
+.page-header-text {
+  min-width: 0;
+}
+
+.page-header-title {
+  font-size: 26px;
+
+  margin-bottom: 4px;
+}
+
+.page-header-subtitle {
+  color: var(--text-muted);
+
+  font-size: 14px;
+}
+
+.page-header-actions {
+  display: flex;
+
+  gap: 8px;
+
+  flex-wrap: wrap;
+}
+
 
 /* ============================================================
    TABLES
@@ -1640,6 +2009,10 @@ h6 {
   border-radius: var(--radius-lg);
 
   box-shadow: var(--shadow-sm);
+
+  /* Contains the absolutely positioned .nav-badge-count of any nav row that
+     happens to be rendered inside it. */
+  position: relative;
 }
 
 .table {
@@ -1650,6 +2023,11 @@ h6 {
   text-align: left;
 
   font-size: 14px;
+
+  /* Table cells hold emails, slugs, payment ids and codes, none of which
+     contain a break opportunity. `anywhere` keeps them inside their column
+     instead of widening the table past the scroll container. */
+  overflow-wrap: anywhere;
 }
 
 .table th {
@@ -1987,6 +2365,37 @@ h6 {
 
 
 /* ============================================================
+   COARSE POINTER - touch tap targets
+   ============================================================ */
+
+/* .btn-sm computes to ~33px and .page-btn to 36px, both well under the 44px
+   minimum target size. Only applies to touch-capable pointers, so the desktop
+   density is untouched. */
+@media (pointer: coarse) {
+
+  .btn-sm {
+    min-height: 40px;
+
+    padding: 8px 16px;
+  }
+
+  .page-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .admin-nav-link {
+    min-height: 44px;
+  }
+
+  .product-card-wishlist-btn {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+
+/* ============================================================
    TABLET - 1024px
    ============================================================ */
 
@@ -2067,6 +2476,46 @@ h6 {
     flex-direction: row;
 
     flex-wrap: wrap;
+
+    align-items: center;
+
+    /* Once the rail stops being a side column it must stop being a
+       100vh sticky block, or it pushes the content a full screen down. */
+    position: static;
+
+    height: auto;
+
+    max-height: none;
+
+    overflow-y: visible;
+  }
+
+  /* The sidebar is a row here, so the link list inside it has to be a row
+     too - a column next to a row wraps to its own full-width line. */
+  .portal-nav {
+    flex-direction: row;
+
+    flex-wrap: wrap;
+
+    flex: 1 1 auto;
+
+    margin-top: 0;
+  }
+
+  .portal-sidebar-head {
+    flex: 1 1 100%;
+
+    margin-bottom: 0;
+  }
+
+  .portal-sidebar-foot {
+    margin-top: 0;
+
+    padding-top: 0;
+
+    flex-direction: row;
+
+    align-items: center;
   }
 }
 
@@ -2103,7 +2552,11 @@ h6 {
 
   .navbar {
     width: 100%;
-    overflow: hidden;
+
+    /* `hidden` here clipped the absolutely positioned user dropdown, which
+       hangs below the header. Only .navbar-bottom needs to scroll sideways,
+       and it sets its own overflow-x. */
+    overflow: visible;
   }
 
   .navbar-top {
@@ -2173,7 +2626,10 @@ h6 {
     gap: 0;
   }
 
-  .nav-action-btn span {
+  /* Hides the text label only. The bare `.nav-action-btn span` selector is
+     (0,1,1) and therefore outranked the (0,1,0) `.nav-badge-count` rule,
+     which silently removed the cart/wishlist counters from every phone. */
+  .nav-action-btn > span:not(.nav-badge-count) {
     display: none;
   }
 
@@ -2183,6 +2639,8 @@ h6 {
   }
 
   .nav-badge-count {
+    display: flex;
+
     top: 0;
     right: 0;
 
@@ -2337,6 +2795,10 @@ h6 {
     margin-bottom: 18px;
   }
 
+  .page-heading h1 {
+    font-size: 22px;
+  }
+
 
   /* PRODUCTS */
 
@@ -2435,6 +2897,22 @@ h6 {
     gap: 16px;
   }
 
+  /* The 260px filter rail left the product grid ~16px wide on a 320px phone
+     and the page was clipped at its 525px natural width. */
+  .catalog-layout {
+    grid-template-columns: minmax(0, 1fr);
+
+    gap: 18px;
+  }
+
+  .catalog-sidebar {
+    position: static;
+
+    top: auto;
+
+    padding: 16px;
+  }
+
   .cart-items-card {
     padding: 14px;
 
@@ -2442,11 +2920,60 @@ h6 {
   }
 
   .cart-item-row {
+    /* Five children, two tracks: auto-placement put the quantity stepper in
+       the 60px thumbnail column (it needs ~100px) and stretched the line
+       total across the rest. Place them explicitly instead. */
     grid-template-columns:
       60px
-      minmax(0, 1fr);
+      minmax(0, 1fr)
+      auto;
 
-    gap: 10px;
+    row-gap: 10px;
+  }
+
+  .cart-item-thumb-link {
+    grid-area:
+      1 / 1
+      / 3 / 2;
+
+    align-self: start;
+  }
+
+  .cart-item-details {
+    grid-area:
+      1 / 2
+      / 2 / 3;
+  }
+
+  .cart-item-row > .qty-counter {
+    grid-area:
+      2 / 2
+      / 3 / 3;
+
+    justify-self: start;
+  }
+
+  .cart-item-total {
+    grid-area:
+      1 / 3
+      / 2 / 4;
+  }
+
+  .cart-item-remove {
+    grid-area:
+      2 / 3
+      / 3 / 4;
+
+    justify-self: end;
+  }
+
+  .qty-btn {
+    width: 30px;
+    height: 30px;
+  }
+
+  .qty-val {
+    min-width: 30px;
   }
 
   .cart-item-thumb {
@@ -2467,6 +2994,75 @@ h6 {
     grid-template-columns: 1fr;
 
     gap: 12px;
+  }
+
+  .checkout-layout {
+    grid-template-columns: minmax(0, 1fr);
+
+    gap: 20px;
+  }
+
+  .profile-layout {
+    grid-template-columns: minmax(0, 1fr);
+
+    gap: 20px;
+  }
+
+  .profile-layout .card {
+    padding: 16px;
+  }
+
+  .order-details-layout {
+    grid-template-columns: minmax(0, 1fr);
+
+    gap: 18px;
+  }
+
+  .order-details-layout .card {
+    padding: 16px;
+  }
+
+  /* Five 42px circles plus their labels do not fit side by side on a phone,
+     so the tracker becomes a vertical rail: a left-hand line with each step
+     stacked as icon-beside-label. */
+  .order-timeline {
+    flex-direction: column;
+
+    align-items: stretch;
+
+    gap: 4px;
+  }
+
+  .order-timeline-connector {
+    top: 20px;
+
+    bottom: 20px;
+
+    left: 20px;
+
+    right: auto;
+
+    width: 3px;
+
+    height: auto;
+  }
+
+  .order-timeline-step {
+    flex-direction: row;
+
+    align-items: center;
+
+    gap: 12px;
+
+    width: auto;
+
+    text-align: left;
+
+    padding: 6px 0;
+  }
+
+  .order-timeline-dot {
+    margin-bottom: 0;
   }
 
   .form-control {
@@ -2516,6 +3112,10 @@ h6 {
     font-size: 22px;
   }
 
+  .page-header-title {
+    font-size: 21px;
+  }
+
 
   /* TABLE */
 
@@ -2529,6 +3129,25 @@ h6 {
 
   .table {
     min-width: 650px;
+  }
+
+  /* 18px of side padding per cell is 36px per column before any content, and
+     an 8 column admin table spends ~290px of the phone's width on padding
+     alone. */
+  .table th,
+  .table td {
+    padding: 10px 12px;
+  }
+
+  .table th {
+    font-size: 12px;
+  }
+
+
+  /* CARD */
+
+  .card {
+    padding: 16px;
   }
 
 
@@ -2664,6 +3283,40 @@ h6 {
   .nav-action-btn svg {
     width: 17px;
     height: 17px;
+  }
+
+  /* The wordmark, the three icon buttons and the two "Sign In"/"Sign Up"
+     buttons together need ~330px, which is more than a phone has. Forced onto
+     one line the search field was squeezed to zero width and the last button
+     was pushed off-screen. `flex-wrap` here lets the actions drop to their own
+     full-width row only once they genuinely do not fit, so every control stays
+     visible and the search box keeps real estate. */
+  .navbar-inner {
+    flex-wrap: wrap;
+
+    row-gap: 7px;
+  }
+
+  .nav-search {
+    flex: 1 1 130px;
+
+    min-width: 130px;
+  }
+
+  .nav-actions {
+    flex-wrap: wrap;
+
+    justify-content: flex-end;
+
+    row-gap: 6px;
+  }
+
+  .nav-auth-actions {
+    gap: 6px;
+  }
+
+  .nav-auth-actions .btn-sm {
+    padding: 6px 12px;
   }
 
 

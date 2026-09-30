@@ -9,14 +9,33 @@ import {
   ArrowLeft,
   ShieldCheck,
   CreditCard,
+  Settings,
 } from 'lucide-react';
 import api from '../api/client';
+import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
+import { isAdminRole } from '../utils/roles';
+
+// Mirrors validOrderStatuses in adminController.updateOrderStatus().
+const ORDER_STATUSES = [
+  'pending',
+  'confirmed',
+  'processing',
+  'shipped',
+  'delivered',
+  'cancelled',
+];
 
 export const OrderDetailsPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { role } = useAuth();
+  const { showToast } = useToast();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [updating, setUpdating] = useState(false);
+
+  const canManageOrder = isAdminRole(role);
 
   useEffect(() => {
     async function fetchOrder() {
@@ -35,6 +54,42 @@ export const OrderDetailsPage = () => {
     fetchOrder();
   }, [id]);
 
+  // Staff-only fulfilment action. Reuses the audited admin endpoint so the
+  // existing audit logging keeps recording who changed the status.
+  const updateOrderStatus = async (nextStatus) => {
+    if (!order || nextStatus === order.order_status) return;
+
+    setUpdating(true);
+
+    try {
+      const res = await api.patch(`/admin/orders/${order.id}/status`, {
+        orderStatus: nextStatus,
+      });
+
+      const updated = res.data?.data?.order;
+
+      // Reflect the new status immediately, without a full reload.
+      setOrder((previous) =>
+        previous ? { ...previous, ...(updated || { order_status: nextStatus }) } : previous
+      );
+
+      showToast(
+        res.data?.message || `Order marked ${nextStatus}`,
+        'success'
+      );
+    } catch (err) {
+      showToast(
+        err.response?.data?.message || 'Could not update the order',
+        'error'
+      );
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const backPath = canManageOrder ? '/admin/orders' : '/orders';
+  const backLabel = canManageOrder ? 'Back to Admin Orders' : 'Back to My Orders';
+
   if (loading) {
     return (
       <div className="site-wrapper" style={{ padding: '80px 0', textAlign: 'center', color: 'var(--text-muted)' }}>
@@ -50,7 +105,7 @@ export const OrderDetailsPage = () => {
         <p style={{ color: 'var(--text-muted)', margin: '16px 0 24px' }}>
           We could not locate this order.
         </p>
-        <Link to="/orders" className="btn btn-primary">Back to Orders</Link>
+        <Link to={backPath} className="btn btn-primary">{backLabel}</Link>
       </div>
     );
   }
@@ -59,6 +114,7 @@ export const OrderDetailsPage = () => {
   const steps = [
     { title: 'Order Placed', statusKey: 'pending', icon: Clock },
     { title: 'Payment Confirmed', statusKey: 'confirmed', icon: CheckCircle2 },
+    { title: 'Processing', statusKey: 'processing', icon: Settings },
     { title: 'Shipped & In Transit', statusKey: 'shipped', icon: Truck },
     { title: 'Delivered', statusKey: 'delivered', icon: Package },
   ];
@@ -67,10 +123,15 @@ export const OrderDetailsPage = () => {
     const statusOrder = {
       pending: 0,
       confirmed: 1,
-      shipped: 2,
-      delivered: 3,
+      processing: 2,
+      shipped: 3,
+      delivered: 4,
     };
-    const currentLevel = statusOrder[order.order_status] ?? 0;
+    // A cancelled order has no fulfilment progress to show.
+    const currentLevel =
+      order.order_status === 'cancelled'
+        ? -1
+        : (statusOrder[order.order_status] ?? 0);
     if (stepIndex < currentLevel) return 'completed';
     if (stepIndex === currentLevel) return 'active';
     return 'upcoming';
@@ -78,8 +139,8 @@ export const OrderDetailsPage = () => {
 
   return (
     <div className="site-wrapper" style={{ margin: '36px auto 80px' }} id="order-details-container">
-      <button onClick={() => navigate('/orders')} className="btn btn-secondary btn-sm" style={{ marginBottom: '24px' }}>
-        <ArrowLeft size={16} /> Back to My Orders
+      <button onClick={() => navigate(backPath)} className="btn btn-secondary btn-sm" style={{ marginBottom: '24px' }}>
+        <ArrowLeft size={16} /> {backLabel}
       </button>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '24px' }}>
@@ -96,22 +157,48 @@ export const OrderDetailsPage = () => {
         </div>
       </div>
 
+      {/* Manage Order - admin / super_admin only. Customers never see this. */}
+      {canManageOrder ? (
+        <div className="card" style={{ padding: '24px', marginBottom: '32px' }} id="manage-order-panel">
+          <h3 style={{ fontSize: '16px', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+            <ShieldCheck size={18} color="var(--primary)" /> Manage Order
+          </h3>
+          <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
+            Advance or cancel this order. Every change is recorded in the audit log.
+          </p>
+
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {ORDER_STATUSES.map((value) => (
+              <button
+                key={value}
+                type="button"
+                className={`btn btn-sm ${
+                  value === order.order_status
+                    ? 'btn-primary'
+                    : 'btn-secondary'
+                }`}
+                disabled={updating || value === order.order_status}
+                onClick={() => updateOrderStatus(value)}
+                aria-label={`Set order ${order.order_number || order.id} to ${value}`}
+              >
+                {value.charAt(0).toUpperCase() + value.slice(1)}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       {/* Shipment Visual Progress Tracker */}
       <div className="card" style={{ padding: '32px 24px', marginBottom: '32px' }} id="shipment-progress-tracker">
         <h3 style={{ fontSize: '16px', marginBottom: '24px' }}>Shipment Tracking Timeline</h3>
-        <div style={{ display: 'flex', justifyContent: 'space-between', position: 'relative' }}>
+        {order.order_status === 'cancelled' && (
+          <p style={{ fontSize: '13px', color: 'var(--danger)', marginTop: '-14px', marginBottom: '18px' }}>
+            This order was cancelled and is no longer in transit.
+          </p>
+        )}
+        <div className="order-timeline">
           {/* Connector Line */}
-          <div
-            style={{
-              position: 'absolute',
-              top: '20px',
-              left: '5%',
-              right: '5%',
-              height: '3px',
-              background: 'var(--border-color)',
-              zIndex: 1,
-            }}
-          />
+          <div className="order-timeline-connector" />
 
           {steps.map((st, idx) => {
             const state = getStepState(idx);
@@ -121,16 +208,11 @@ export const OrderDetailsPage = () => {
             return (
               <div
                 key={idx}
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  zIndex: 2,
-                  width: '25%',
-                  textAlign: 'center',
-                }}
+                className="order-timeline-step"
+                style={{ '--step-share': `${100 / steps.length}%` }}
               >
                 <div
+                  className="order-timeline-dot"
                   style={{
                     width: '42px',
                     height: '42px',
@@ -141,16 +223,17 @@ export const OrderDetailsPage = () => {
                     alignItems: 'center',
                     justifyContent: 'center',
                     boxShadow: state === 'active' ? '0 0 0 4px var(--primary-light)' : 'none',
-                    marginBottom: '10px',
                   }}
                 >
                   <Icon size={20} />
                 </div>
-                <div style={{ fontWeight: 700, fontSize: '13px', color: isDone ? 'var(--text-main)' : 'var(--text-light)' }}>
-                  {st.title}
-                </div>
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px', textTransform: 'capitalize' }}>
-                  {state}
+                <div className="order-timeline-label">
+                  <div style={{ fontWeight: 700, fontSize: '13px', color: isDone ? 'var(--text-main)' : 'var(--text-light)' }}>
+                    {st.title}
+                  </div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px', textTransform: 'capitalize' }}>
+                    {state}
+                  </div>
                 </div>
               </div>
             );
@@ -159,7 +242,7 @@ export const OrderDetailsPage = () => {
       </div>
 
       {/* Details Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '32px' }}>
+      <div className="order-details-layout">
         {/* Purchased Items Card */}
         <div className="card" style={{ padding: '24px' }}>
           <h2 style={{ fontSize: '18px', marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid var(--border-color)' }}>

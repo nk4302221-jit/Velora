@@ -56,48 +56,25 @@ export const PortalLayout = ({
         className="admin-sidebar"
         style={{
           borderRight: `3px solid ${accentColor}`,
-          position: 'sticky',
-          top: 0,
-          height: '100vh',
-          overflowY: 'auto',
         }}
       >
-        <div style={{ marginBottom: 20 }}>
+        <div className="portal-sidebar-head">
           <div
             className="badge"
             style={{
               background: accentColor,
               color: '#fff',
               marginBottom: 10,
-              display: 'inline-block',
             }}
           >
             {roleLabel(user?.role)}
           </div>
 
-          <h2
-            style={{
-              color: '#fff',
-              fontSize: '17px',
-              fontWeight: 800,
-              marginBottom: 4,
-            }}
-          >
-            {portalTitle}
-          </h2>
+          <h2 className="portal-sidebar-title">{portalTitle}</h2>
 
-          <p style={{ color: '#94a3b8', fontSize: 12 }}>{portalSubtitle}</p>
+          <p className="portal-sidebar-subtitle">{portalSubtitle}</p>
 
-          <p
-            style={{
-              color: '#64748b',
-              fontSize: 11,
-              marginTop: 10,
-              wordBreak: 'break-all',
-            }}
-          >
-            {user?.email}
-          </p>
+          <p className="portal-sidebar-email">{user?.email}</p>
         </div>
 
         <button
@@ -118,14 +95,7 @@ export const PortalLayout = ({
           Menu
         </button>
 
-        <nav
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 4,
-            marginTop: 8,
-          }}
-        >
+        <nav className="portal-nav">
           {visibleItems.map((item) => {
             const Icon = item.icon;
 
@@ -147,19 +117,10 @@ export const PortalLayout = ({
           })}
         </nav>
 
-        <div
-          style={{
-            marginTop: 'auto',
-            paddingTop: 24,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 8,
-          }}
-        >
+        <div className="portal-sidebar-foot">
           <Link
             to="/"
-            className="admin-nav-link"
-            style={{ fontSize: 13 }}
+            className="admin-nav-link portal-nav-link-sm"
           >
             <ExternalLink size={16} />
             View Storefront
@@ -169,15 +130,7 @@ export const PortalLayout = ({
             type="button"
             onClick={handleLogout}
             disabled={loggingOut}
-            className="admin-nav-link"
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: loggingOut ? 'not-allowed' : 'pointer',
-              color: '#f87171',
-              fontSize: 14,
-              textAlign: 'left',
-            }}
+            className="admin-nav-link portal-logout"
             data-testid="portal-logout-btn"
           >
             <LogOut size={18} />
