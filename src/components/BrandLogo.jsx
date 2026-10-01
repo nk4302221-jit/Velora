@@ -38,6 +38,9 @@ export const BrandLogo = ({
           src={veloraLogo}
           alt="Velora Logo"
           referrerPolicy="no-referrer"
+          width={size}
+          height={size}
+          decoding="async"
           style={{
             width: '100%',
             height: '100%',

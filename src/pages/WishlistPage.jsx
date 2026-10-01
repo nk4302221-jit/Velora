@@ -55,7 +55,7 @@ export const WishlistPage = () => {
             <div key={item.wishlist_item_id} className="product-card" id={`wishlist-card-${item.product_id}`}>
               <div className="product-card-img-wrap">
                 <Link to={`/products/${item.product_id}`}>
-                  <img src={item.product_image} alt={item.name} className="product-card-img" />
+                  <img src={item.product_image} alt={item.name} className="product-card-img" loading="lazy" decoding="async" />
                 </Link>
                 <button
                   type="button"

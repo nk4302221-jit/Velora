@@ -22,33 +22,61 @@ export const HomePage = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
+
     async function loadHomeProducts() {
       try {
         setLoading(true);
-        // Featured
-        const featuredRes = await api.get('/products?limit=4&sort=rating');
-        if (featuredRes.data.success) {
-          setFeaturedProducts(featuredRes.data.products);
+
+        // The three shelves are independent requests. They used to be awaited
+        // one after another, so the last section could not paint until two
+        // extra round trips had finished. Firing them together cuts the
+        // critical path from three sequential requests to one.
+        //
+        // allSettled (not all) keeps the original behaviour: each shelf is
+        // applied from its own successful response, and one failing endpoint
+        // no longer prevents the other two from rendering.
+        const [featuredRes, popularRes, newRes] = await Promise.allSettled([
+          api.get('/products?limit=4&sort=rating'),
+          api.get('/products?limit=4&sort=popular'),
+          api.get('/products?limit=4&sort=newest'),
+        ]);
+
+        if (cancelled) return;
+
+        if (featuredRes.status === 'fulfilled' && featuredRes.value.data.success) {
+          setFeaturedProducts(featuredRes.value.data.products);
         }
 
-        // Popular
-        const popularRes = await api.get('/products?limit=4&sort=popular');
-        if (popularRes.data.success) {
-          setPopularProducts(popularRes.data.products);
+        if (popularRes.status === 'fulfilled' && popularRes.value.data.success) {
+          setPopularProducts(popularRes.value.data.products);
         }
 
-        // New Arrivals
-        const newRes = await api.get('/products?limit=4&sort=newest');
-        if (newRes.data.success) {
-          setNewArrivals(newRes.data.products);
+        if (newRes.status === 'fulfilled' && newRes.value.data.success) {
+          setNewArrivals(newRes.value.data.products);
+        }
+
+        const failed = [featuredRes, popularRes, newRes].filter(
+          (r) => r.status === 'rejected'
+        );
+
+        if (failed.length > 0) {
+          console.error('Failed to load some home products:', failed);
         }
       } catch (err) {
         console.error('Failed to load home products:', err);
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     }
+
     loadHomeProducts();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const categories = [
@@ -91,6 +119,10 @@ export const HomePage = () => {
               src="https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&auto=format&fit=crop&q=80"
               alt="Premium Headphones"
               className="hero-img"
+              /* Above the fold and the LCP element: fetch it first and decode
+                 it off the main thread. Never lazy-load it. */
+              fetchPriority="high"
+              decoding="async"
             />
           </div>
         </div>

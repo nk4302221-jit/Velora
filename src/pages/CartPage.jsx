@@ -80,7 +80,7 @@ export const CartPage = () => {
               <div key={item.item_id} className="cart-item-row" id={`cart-row-${item.item_id}`}>
                 {/* Thumbnail */}
                 <Link to={`/products/${item.product_id}`} className="cart-item-thumb-link">
-                  <img src={item.product_image} alt={item.name} className="cart-item-thumb" />
+                  <img src={item.product_image} alt={item.name} className="cart-item-thumb" loading="lazy" decoding="async" />
                 </Link>
 
                 {/* Details */}

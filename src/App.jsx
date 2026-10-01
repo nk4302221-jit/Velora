@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import {
   BrowserRouter,
   Routes,
@@ -17,56 +17,108 @@ import { Footer } from './components/Footer';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { AdminRoute } from './components/AdminRoute';
 
+// EAGER: the storefront homepage is the first paint, so it stays in the
+// initial bundle. Everything else below is deferred.
 import { HomePage } from './pages/HomePage';
-import { ProductsPage } from './pages/ProductsPage';
-import   ProductDetailsPage  from './pages/ProductDetailsPage';
-import { CartPage } from './pages/CartPage';
-import { WishlistPage } from './pages/WishlistPage';
-import { MembershipPlansPage } from './pages/MembershipPlansPage';
-import { CheckoutPage } from './pages/CheckoutPage';
-import { OrderConfirmationPage } from './pages/OrderConfirmationPage';
-import { OrdersPage } from './pages/OrdersPage';
-import { OrderDetailsPage } from './pages/OrderDetailsPage';
-import { ProfilePage } from './pages/ProfilePage';
-import { LoginPage } from './pages/LoginPage';
-import { OtpPinLoginPage } from './pages/OtpPinLoginPage';
-import { RegisterPage } from './pages/RegisterPage';
-import { VerifyEmailPage } from './pages/VerifyEmailPage';
-import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
-import { ResetPasswordPage } from './pages/ResetPasswordPage';
+
+// =====================================================
+// CODE SPLITTING
+//
+// Every page below the storefront homepage is loaded on demand
+// with React.lazy, so a visitor landing on "/" downloads only the
+// chrome + homepage instead of the entire customer, admin and
+// super-admin application.
+//
+// Notes on correctness:
+//  * `lazyNamed` adapts the NAMED exports used across this codebase
+//    (`export const HomePage = ...`) into the `{ default }` shape
+//    React.lazy requires. Nothing is renamed or removed.
+//  * `HomePage` (plus Navbar / Footer / ProductCard and the auth,
+//    cart and wishlist contexts) stays EAGER on purpose - it is the
+//    above-the-fold render, so deferring it would only add a round
+//    trip to the most important paint.
+//  * Route paths, guards and components are byte-for-byte unchanged.
+// =====================================================
+const lazyNamed = (loader, exportName) =>
+  lazy(() => loader().then((mod) => ({ default: mod[exportName] })));
+
+// --- Storefront ---
+const ProductsPage = lazyNamed(() => import('./pages/ProductsPage'), 'ProductsPage');
+const ProductDetailsPage = lazyNamed(() => import('./pages/ProductDetailsPage'), 'ProductDetailsPage');
+const CartPage = lazyNamed(() => import('./pages/CartPage'), 'CartPage');
+const WishlistPage = lazyNamed(() => import('./pages/WishlistPage'), 'WishlistPage');
+const MembershipPlansPage = lazyNamed(() => import('./pages/MembershipPlansPage'), 'MembershipPlansPage');
+const CheckoutPage = lazyNamed(() => import('./pages/CheckoutPage'), 'CheckoutPage');
+const OrderConfirmationPage = lazyNamed(() => import('./pages/OrderConfirmationPage'), 'OrderConfirmationPage');
+const OrdersPage = lazyNamed(() => import('./pages/OrdersPage'), 'OrdersPage');
+const OrderDetailsPage = lazyNamed(() => import('./pages/OrderDetailsPage'), 'OrderDetailsPage');
+const ProfilePage = lazyNamed(() => import('./pages/ProfilePage'), 'ProfilePage');
+
+// --- Auth ---
+const LoginPage = lazyNamed(() => import('./pages/LoginPage'), 'LoginPage');
+const OtpPinLoginPage = lazyNamed(() => import('./pages/OtpPinLoginPage'), 'OtpPinLoginPage');
+const RegisterPage = lazyNamed(() => import('./pages/RegisterPage'), 'RegisterPage');
+const VerifyEmailPage = lazyNamed(() => import('./pages/VerifyEmailPage'), 'VerifyEmailPage');
+const ForgotPasswordPage = lazyNamed(() => import('./pages/ForgotPasswordPage'), 'ForgotPasswordPage');
+const ResetPasswordPage = lazyNamed(() => import('./pages/ResetPasswordPage'), 'ResetPasswordPage');
 
 // --- Super Admin portal ---
-import { SuperAdminDashboardPage } from './pages/SuperAdminDashboardPage';
-import { ManageAdminsPage } from './pages/superadmin/ManageAdminsPage';
-import { RolesPermissionsPage } from './pages/superadmin/RolesPermissionsPage';
-import { AuditLogsPage } from './pages/superadmin/AuditLogsPage';
-import { WebsiteSettingsPage } from './pages/superadmin/WebsiteSettingsPage';
-import { SuperAdminReportsPage } from './pages/admin/ReportsPage';
-import { SuperAdminPaymentsPage } from './pages/admin/PaymentsPage';
+const SuperAdminDashboardPage = lazyNamed(() => import('./pages/SuperAdminDashboardPage'), 'SuperAdminDashboardPage');
+const ManageAdminsPage = lazyNamed(() => import('./pages/superadmin/ManageAdminsPage'), 'ManageAdminsPage');
+const RolesPermissionsPage = lazyNamed(() => import('./pages/superadmin/RolesPermissionsPage'), 'RolesPermissionsPage');
+const AuditLogsPage = lazyNamed(() => import('./pages/superadmin/AuditLogsPage'), 'AuditLogsPage');
+const WebsiteSettingsPage = lazyNamed(() => import('./pages/superadmin/WebsiteSettingsPage'), 'WebsiteSettingsPage');
+const SuperAdminReportsPage = lazyNamed(() => import('./pages/admin/ReportsPage'), 'SuperAdminReportsPage');
+const SuperAdminPaymentsPage = lazyNamed(() => import('./pages/admin/PaymentsPage'), 'SuperAdminPaymentsPage');
 
 // --- Admin portal ---
 // Aliased: the storefront already exports OrdersPage/ProductsPage/ReviewsPage
 // with the same names, and both sets are mounted in this file.
-import { AdminPortalDashboardPage } from './pages/admin/AdminPortalDashboardPage';
-import { AdminDashboardPage } from './pages/AdminDashboardPage';
-import { OrdersPage as AdminOrdersPage } from './pages/admin/OrdersPage';
-import { ProductsPage as AdminProductsPage } from './pages/admin/ProductsPage';
-import { CategoriesPage } from './pages/admin/CategoriesPage';
-import { InventoryPage } from './pages/admin/InventoryPage';
-import { CouponsPage } from './pages/admin/CouponsPage';
-import { OffersPage } from './pages/admin/OffersPage';
-import { ReviewsPage as AdminReviewsPage } from './pages/admin/ReviewsPage';
-import { ReturnsPage as AdminReturnsPage } from './pages/admin/ReturnsPage';
-import { CustomersPage } from './pages/admin/CustomersPage';
-import { ReportsPage } from './pages/admin/ReportsPage';
-import { PaymentsPage } from './pages/admin/PaymentsPage';
+const AdminPortalDashboardPage = lazyNamed(() => import('./pages/admin/AdminPortalDashboardPage'), 'AdminPortalDashboardPage');
+const AdminDashboardPage = lazyNamed(() => import('./pages/AdminDashboardPage'), 'AdminDashboardPage');
+const AdminOrdersPage = lazyNamed(() => import('./pages/admin/OrdersPage'), 'OrdersPage');
+const AdminProductsPage = lazyNamed(() => import('./pages/admin/ProductsPage'), 'ProductsPage');
+const CategoriesPage = lazyNamed(() => import('./pages/admin/CategoriesPage'), 'CategoriesPage');
+const InventoryPage = lazyNamed(() => import('./pages/admin/InventoryPage'), 'InventoryPage');
+const CouponsPage = lazyNamed(() => import('./pages/admin/CouponsPage'), 'CouponsPage');
+const OffersPage = lazyNamed(() => import('./pages/admin/OffersPage'), 'OffersPage');
+const AdminReviewsPage = lazyNamed(() => import('./pages/admin/ReviewsPage'), 'ReviewsPage');
+const AdminReturnsPage = lazyNamed(() => import('./pages/admin/ReturnsPage'), 'ReturnsPage');
+const CustomersPage = lazyNamed(() => import('./pages/admin/CustomersPage'), 'CustomersPage');
+const ReportsPage = lazyNamed(() => import('./pages/admin/ReportsPage'), 'ReportsPage');
+const PaymentsPage = lazyNamed(() => import('./pages/admin/PaymentsPage'), 'PaymentsPage');
 
 // --- Customer portal ---
-import { CustomerDashboardPage } from './pages/customer/CustomerDashboardPage';
-import { MyOrdersPage } from './pages/customer/MyOrdersPage';
-import { MyReturnsPage } from './pages/customer/MyReturnsPage';
-import { PaymentHistoryPage } from './pages/customer/PaymentHistoryPage';
-import { MyReviewsPage } from './pages/customer/MyReviewsPage';
+const CustomerDashboardPage = lazyNamed(() => import('./pages/customer/CustomerDashboardPage'), 'CustomerDashboardPage');
+const MyOrdersPage = lazyNamed(() => import('./pages/customer/MyOrdersPage'), 'MyOrdersPage');
+const MyReturnsPage = lazyNamed(() => import('./pages/customer/MyReturnsPage'), 'MyReturnsPage');
+const PaymentHistoryPage = lazyNamed(() => import('./pages/customer/PaymentHistoryPage'), 'PaymentHistoryPage');
+const MyReviewsPage = lazyNamed(() => import('./pages/customer/MyReviewsPage'), 'MyReviewsPage');
+
+/**
+ * Lightweight Suspense fallback.
+ *
+ * Deliberately reuses the existing `--text-muted` / `site-wrapper` styling so a
+ * deferred chunk looks like the app's own "Verifying credentials..." wait state
+ * instead of introducing a new spinner, a new colour or a new animation.
+ */
+const RouteFallback = () => (
+  <div
+    className="site-wrapper"
+    role="status"
+    aria-live="polite"
+    style={{
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      minHeight: '240px',
+      fontSize: '14px',
+      color: 'var(--text-muted)',
+    }}
+  >
+    Loading...
+  </div>
+);
 
 const NotFoundPage = () => (
   <div
@@ -96,6 +148,11 @@ const NotFoundPage = () => (
  * Portal routes deliberately render WITHOUT this - each portal page supplies
  * its own PortalLayout sidebar, so a signed-in admin does not also see the
  * customer storefront navigation.
+ *
+ * The Suspense boundary lives INSIDE the chrome on purpose: when a route's
+ * chunk is still downloading, only the page area shows the fallback and the
+ * navbar/footer stay on screen, so a client-side navigation never flashes an
+ * empty page.
  */
 const SiteLayout = ({ children }) => (
   <div
@@ -103,7 +160,9 @@ const SiteLayout = ({ children }) => (
   >
     <Navbar />
 
-    <main style={{ flex: 1 }}>{children}</main>
+    <main style={{ flex: 1 }}>
+      <Suspense fallback={<RouteFallback />}>{children}</Suspense>
+    </main>
 
     <Footer />
   </div>
@@ -350,7 +409,13 @@ export default function App() {
         <AuthProvider>
           <CartProvider>
             <WishlistProvider>
-              <AppRoutes />
+              {/* Portal (admin / super-admin / customer) routes have no
+                  storefront chrome of their own, so their fallback is handled
+                  here. Storefront routes are already covered by the Suspense
+                  boundary inside SiteLayout, which React reaches first. */}
+              <Suspense fallback={<RouteFallback />}>
+                <AppRoutes />
+              </Suspense>
             </WishlistProvider>
           </CartProvider>
         </AuthProvider>

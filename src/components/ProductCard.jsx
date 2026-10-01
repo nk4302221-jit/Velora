@@ -164,6 +164,7 @@ export const ProductCard = ({ product }) => {
             alt={product.name || 'Product'}
             className="product-card-img"
             loading="lazy"
+            decoding="async"
             onError={(event) => {
               event.currentTarget.src =
                 '/placeholder-product.png';
