@@ -121,6 +121,24 @@ export const ROLE_PERMISSIONS = {
   [ROLE_SUPER_ADMIN]: Object.values(PERMISSIONS),
 };
 
-/** UX-only mirror of the backend permission check. Never a security boundary. */
-export const hasPermission = (role, permission) =>
-  (ROLE_PERMISSIONS[normalizeRole(role)] || []).includes(permission);
+/**
+ * UX-only mirror of the backend permission check. Never a security boundary.
+ *
+ * `assignedPermissions` is the account's effective grant list as reported by the
+ * API (/api/auth/me). It is honoured for the `admin` role only: a super_admin
+ * always holds everything and a customer holds nothing. When it is omitted the
+ * static role matrix is used, so existing callers keep working unchanged.
+ */
+export const hasPermission = (role, permission, assignedPermissions) => {
+  const normalizedRole = normalizeRole(role);
+
+  if (normalizedRole === ROLE_SUPER_ADMIN) {
+    return true;
+  }
+
+  if (normalizedRole === ROLE_ADMIN && Array.isArray(assignedPermissions)) {
+    return assignedPermissions.includes(permission);
+  }
+
+  return (ROLE_PERMISSIONS[normalizedRole] || []).includes(permission);
+};

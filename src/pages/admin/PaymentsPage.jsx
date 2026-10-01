@@ -45,10 +45,15 @@ const PaymentsContent = () => {
 
   const [page, setPage] = useState(1);
 
-  const canViewPayments = hasPermission(user?.role, PERMISSIONS.VIEW_PAYMENTS);
+  const canViewPayments = hasPermission(
+    user?.role,
+    PERMISSIONS.VIEW_PAYMENTS,
+    user?.permissions
+  );
   const canManageCredentials = hasPermission(
     user?.role,
-    PERMISSIONS.MANAGE_PAYMENT_CREDENTIALS
+    PERMISSIONS.MANAGE_PAYMENT_CREDENTIALS,
+    user?.permissions
   );
 
   // Razorpay credentials. The GET returns a PUBLIC shape only - the secret is

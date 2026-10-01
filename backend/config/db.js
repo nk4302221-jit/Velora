@@ -1034,6 +1034,32 @@ async function ensureSuperAdmin() {
  */
 async function migrateSchema() {
   try {
+    // =====================================================
+    // GRANULAR ADMIN PERMISSIONS
+    // =====================================================
+    // Per-admin permission grants for accounts with the `admin` role. The table
+    // is created here (idempotent, both engines) so it exists on fresh installs
+    // and on databases created before this feature. Super Admin accounts are
+    // never restricted by it, and it is read/written through the existing
+    // executeQuery() abstraction only.
+    if (isSqlite) {
+      await executeQuery(`CREATE TABLE IF NOT EXISTS admin_permissions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        admin_id TEXT NOT NULL,
+        permission TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(admin_id, permission)
+      )`);
+    } else {
+      await executeQuery(`CREATE TABLE IF NOT EXISTS admin_permissions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        admin_id VARCHAR(100) NOT NULL,
+        permission VARCHAR(100) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(admin_id, permission)
+      )`);
+    }
+
     // SQLite requires per-column introspection via PRAGMA
     if (isSqlite) {
       const cols = await executeQuery('PRAGMA table_info(orders)');

@@ -5,6 +5,14 @@ import { successResponse, errorResponse } from '../utils/responseHelper.js';
 import { recordAudit } from '../utils/auditLog.js';
 import { getRolePermissionMatrix } from '../middleware/adminMiddleware.js';
 import { normalizeRole, ROLE_SUPER_ADMIN, ROLE_ADMIN } from '../utils/roleHelper.js';
+import {
+  ASSIGNABLE_PERMISSIONS,
+  isKnownPermission,
+  isSuperAdminOnlyPermission,
+  getAssignedPermissions,
+  getEffectivePermissions,
+  replaceAdminPermissions,
+} from '../utils/adminPermissions.js';
 
 // Columns that are safe to return to a browser. password_hash is never in this
 // list, so it cannot leak through any endpoint below.
@@ -463,6 +471,118 @@ export async function getRoles(req, res) {
   } catch (error) {
     console.error('GetRoles Error:', error);
     return errorResponse(res, 'Failed to retrieve roles', 500);
+  }
+}
+
+/**
+ * Resolves the target of a permission request. Only a non-Super-Admin `admin`
+ * account can be granted permissions: a Super Admin always holds every
+ * permission, and a customer has no administrative access to narrow.
+ */
+async function findPermissionTarget(targetId) {
+  const rows = await executeQuery(
+    "SELECT id, full_name, email, role, status FROM users WHERE id = ? AND role = 'admin'",
+    [targetId]
+  );
+
+  return rows[0] || null;
+}
+
+/**
+ * GET /api/super-admin/admins/:id/permissions
+ * Super Admin only. Returns the permissions currently stored for one Admin
+ * account, plus the effective set so the console can show what the account is
+ * actually allowed to do.
+ */
+export async function getAdminPermissions(req, res) {
+  try {
+    const targetId = parseInt(req.params.id, 10);
+    if (Number.isNaN(targetId)) {
+      return errorResponse(res, 'Invalid user ID', 400);
+    }
+
+    const target = await findPermissionTarget(targetId);
+    if (!target) {
+      return errorResponse(res, 'Only admin accounts have assignable permissions', 404);
+    }
+
+    const assigned = await getAssignedPermissions(targetId);
+
+    return successResponse(res, 'Admin permissions retrieved', {
+      admin: target,
+      // Explicitly stored grants. Empty means the account still uses the role
+      // default set (see utils/adminPermissions.js).
+      assigned,
+      // What the account can actually do right now.
+      effective: await getEffectivePermissions(target),
+      assignablePermissions: ASSIGNABLE_PERMISSIONS,
+    });
+  } catch (error) {
+    console.error('GetAdminPermissions Error:', error);
+    return errorResponse(res, 'Failed to retrieve admin permissions', 500);
+  }
+}
+
+/**
+ * PUT /api/super-admin/admins/:id/permissions
+ * Super Admin only. Replaces the stored grants of one Admin account. Unknown
+ * names and Super-Admin-only names are rejected so the Admin role can never be
+ * granted a path to escalate itself.
+ */
+export async function updateAdminPermissions(req, res) {
+  try {
+    const targetId = parseInt(req.params.id, 10);
+    if (Number.isNaN(targetId)) {
+      return errorResponse(res, 'Invalid user ID', 400);
+    }
+
+    const permissions = req.body?.permissions;
+
+    if (!Array.isArray(permissions)) {
+      return errorResponse(res, 'A permissions array is required', 400);
+    }
+
+    const requested = permissions
+      .map((permission) => String(permission || '').trim().toLowerCase())
+      .filter(Boolean);
+
+    const unknown = requested.filter((permission) => !isKnownPermission(permission));
+    if (unknown.length > 0) {
+      return errorResponse(res, `Unknown permission: ${unknown[0]}`, 400);
+    }
+
+    const forbidden = requested.filter((permission) => isSuperAdminOnlyPermission(permission));
+    if (forbidden.length > 0) {
+      return errorResponse(
+        res,
+        `The "${forbidden[0]}" permission is reserved for the Super Admin role`,
+        400
+      );
+    }
+
+    const target = await findPermissionTarget(targetId);
+    if (!target) {
+      return errorResponse(res, 'Only admin accounts have assignable permissions', 404);
+    }
+
+    const saved = await replaceAdminPermissions(targetId, requested);
+
+    await recordAudit({
+      req,
+      action: 'admin.permissions_updated',
+      entityType: 'user',
+      entityId: targetId,
+      details: { targetEmail: target.email, permissions: saved },
+    });
+
+    return successResponse(res, 'Admin permissions updated', {
+      admin: target,
+      assigned: saved,
+      effective: await getEffectivePermissions(target),
+    });
+  } catch (error) {
+    console.error('UpdateAdminPermissions Error:', error);
+    return errorResponse(res, 'Failed to update admin permissions', 500);
   }
 }
 

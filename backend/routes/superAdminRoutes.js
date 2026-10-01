@@ -9,6 +9,8 @@ import {
   resetAdminPassword,
   deleteAdmin,
   getRoles,
+  getAdminPermissions,
+  updateAdminPermissions,
   getAuditLogs,
   getSettings,
   updateSettings,
@@ -17,7 +19,11 @@ import {
 } from '../controllers/superAdminController.js';
 
 import { authenticate } from '../middleware/authMiddleware.js';
-import { authorizeSuperAdmin } from '../middleware/adminMiddleware.js';
+import {
+  authorizeSuperAdmin,
+  authorizePermission,
+} from '../middleware/adminMiddleware.js';
+import { PERMISSIONS } from '../utils/roleHelper.js';
 
 const router = express.Router();
 
@@ -43,6 +49,21 @@ router.delete('/admins/:id', deleteAdmin);
 
 // --- Roles & Permissions -------------------------------------------------
 router.get('/roles', getRoles);
+
+// --- Granular Admin permissions (Super Admin only) ----------------------
+// Assign / remove the individual permissions of an `admin` account. The router
+// chain above already requires a super_admin, and the extra manage_admins
+// permission check keeps the capability named in the permission matrix.
+router.get(
+  '/admins/:id/permissions',
+  authorizePermission(PERMISSIONS.MANAGE_ADMINS),
+  getAdminPermissions
+);
+router.put(
+  '/admins/:id/permissions',
+  authorizePermission(PERMISSIONS.MANAGE_ADMINS),
+  updateAdminPermissions
+);
 
 // --- Audit Logs ----------------------------------------------------------
 router.get('/audit-logs', getAuditLogs);

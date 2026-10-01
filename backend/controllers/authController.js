@@ -5,6 +5,7 @@ import { generateToken } from '../utils/jwtHelper.js';
 import { successResponse, errorResponse } from '../utils/responseHelper.js';
 import { sendVerificationEmail, sendPasswordResetEmail } from '../services/emailService.js';import { handleSocialAuth } from '../services/oauthService.js';
 import { recordAudit } from '../utils/auditLog.js';
+import { getEffectivePermissions } from '../utils/adminPermissions.js';
 
 // =====================================================
 // LOGIN IDENTIFIER RESOLUTION
@@ -521,6 +522,9 @@ export async function login(req, res) {
         phone: user.phone,
         active_plan_id: user.active_plan_id,
         email_verified: Boolean(user.email_verified),
+        // The caller's effective permissions, so the UI can hide what the API
+        // would refuse. Always [] for a customer. Never a security boundary.
+        permissions: await getEffectivePermissions(user),
       },
     });
   } catch (error) {
@@ -643,7 +647,15 @@ export async function getMe(req, res) {  try {
     }
 
     const user = users[0];
-    return successResponse(res, 'Profile retrieved', { user });
+    return successResponse(res, 'Profile retrieved', {
+      user: {
+        ...user,
+        // Granular admin permissions assigned to this account (see
+        // utils/adminPermissions.js). Always [] for a customer. Read-only here:
+        // only a Super Admin can change it.
+        permissions: await getEffectivePermissions(user),
+      },
+    });
   } catch (error) {
     console.error('GetMe Error:', error);
     return errorResponse(res, 'Failed to retrieve user profile', 500);

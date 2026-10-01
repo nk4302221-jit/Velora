@@ -40,7 +40,7 @@ const router = express.Router();
 router.use(authenticate, authorizeAdmin);
 
 // --- Categories ----------------------------------------------------------
-router.get('/categories', getAllCategories);
+router.get('/categories', authorizePermission(PERMISSIONS.MANAGE_CATEGORIES), getAllCategories);
 router.post('/categories', authorizePermission(PERMISSIONS.MANAGE_CATEGORIES), createCategory);
 router.put('/categories/:id', authorizePermission(PERMISSIONS.MANAGE_CATEGORIES), updateCategory);
 router.delete(

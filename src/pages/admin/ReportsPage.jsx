@@ -81,7 +81,11 @@ const ReportsContent = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const canViewReports = hasPermission(user?.role, PERMISSIONS.VIEW_REPORTS);
+  const canViewReports = hasPermission(
+    user?.role,
+    PERMISSIONS.VIEW_REPORTS,
+    user?.permissions
+  );
 
   const load = useCallback(async () => {
     if (!canViewReports) return;

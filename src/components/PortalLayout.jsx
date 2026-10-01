@@ -29,10 +29,12 @@ export const PortalLayout = ({
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
-  // Hide entries the signed-in role does not hold.
+  // Hide entries the signed-in role does not hold. For an `admin` account this
+  // uses the permissions assigned to it in the database, so the sidebar matches
+  // exactly what the API will allow.
   const visibleItems = navItems.filter(
     (item) =>
-      !item.permission || hasPermission(user?.role, item.permission)
+      !item.permission || hasPermission(user?.role, item.permission, user?.permissions)
   );
 
   const handleLogout = async () => {

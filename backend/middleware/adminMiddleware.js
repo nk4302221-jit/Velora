@@ -4,7 +4,6 @@ import {
   normalizeRole,
   isAdminRole,
   isSuperAdminRole,
-  hasPermission,
   permissionsForRole,
   PERMISSION_LABELS,
   ROLE_PERMISSIONS,
@@ -12,6 +11,8 @@ import {
   ROLE_ADMIN,
   ROLE_SUPER_ADMIN,
 } from '../utils/roleHelper.js';
+
+import { hasEffectivePermission } from '../utils/adminPermissions.js';
 
 // ==========================================
 // Admin Authorization
@@ -122,13 +123,16 @@ export function authorizeSuperAdmin(req, res, next) {
 // ==========================================
 // PERMISSION AUTHORIZATION
 //
-// Grants access when the caller's role holds the named permission in the
-// backend permission matrix (utils/roleHelper.js). This is the single
-// enforcement point used by every management route, so a route can never
-// accidentally ship with only a UI guard behind it.
+// Grants access when the caller holds the named permission.
+//   - super_admin : always, never restricted by admin_permissions
+//   - admin       : exactly what admin_permissions grants for that account
+//   - customer    : never
+// A missing permission is rejected with 403. This is the single enforcement
+// point used by every management route, so a route can never accidentally ship
+// with only a UI guard behind it.
 // ==========================================
 export function authorizePermission(permission) {
-  return function permissionGuard(req, res, next) {
+  return async function permissionGuard(req, res, next) {
     if (!req.user) {
       console.warn(`[AdminAPI] authorizePermission(${permission}) denied - no req.user`, {
         method: req.method,
@@ -140,7 +144,18 @@ export function authorizePermission(permission) {
 
     const role = normalizeRole(req.user.role);
 
-    if (!hasPermission(role, permission)) {
+    // Database-aware check (utils/adminPermissions.js): Super Admin always
+    // passes, an Admin passes only for its stored grants, a customer never does.
+    let granted = false;
+
+    try {
+      granted = await hasEffectivePermission(req.user, permission);
+    } catch (error) {
+      console.error('Permission check Error:', error);
+      return errorResponse(res, 'Failed to verify permissions', 500);
+    }
+
+    if (!granted) {
       console.warn(`[AdminAPI] authorizePermission(${permission}) DENIED`, {
         method: req.method,
         url: req.originalUrl,

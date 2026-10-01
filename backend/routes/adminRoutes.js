@@ -48,7 +48,7 @@ router.get('/dashboard', getDashboardStats);
 // ======================================================
 
 // Get all users
-router.get('/users', getUsers);
+router.get('/users', authorizePermission(PERMISSIONS.MANAGE_CUSTOMERS), getUsers);
 
 // Create admin - SUPER ADMIN ONLY
 // Chain: authenticate -> authorizeAdmin -> authorizeSuperAdmin
@@ -59,13 +59,18 @@ router.post(
 );
 
 // Get user details
-router.get('/users/:id', getUserDetails);
+router.get(
+  '/users/:id',
+  authorizePermission(PERMISSIONS.MANAGE_CUSTOMERS),
+  getUserDetails
+);
 
 // Update user status - admin level, but the controller blocks
 // admins from touching admin/super_admin accounts.
-// Chain: authenticate -> authorizeAdmin
+// Chain: authenticate -> authorizeAdmin -> authorizePermission(manage_customers)
 router.patch(
   '/users/:id/status',
+  authorizePermission(PERMISSIONS.MANAGE_CUSTOMERS),
   updateUserStatus
 );
 
@@ -82,10 +87,15 @@ router.patch(
 // Order Management
 // ======================================================
 
-router.get('/orders', getAdminOrders);
+router.get(
+  '/orders',
+  authorizePermission(PERMISSIONS.MANAGE_ORDERS),
+  getAdminOrders
+);
 
 router.patch(
   '/orders/:id/status',
+  authorizePermission(PERMISSIONS.MANAGE_ORDERS),
   updateOrderStatus
 );
 
@@ -109,6 +119,7 @@ router.get('/payments', authorizePermission(PERMISSIONS.VIEW_PAYMENTS), getPayme
 
 router.get(
   '/payments/razorpay',
+  authorizePermission(PERMISSIONS.VIEW_PAYMENTS),
   getRazorpayConfigStatus
 );
 
