@@ -22,15 +22,13 @@ import { useToast } from '../context/ToastContext';
 
 import { BrandLogo } from '../components/BrandLogo';
 
-// Mirrors the server constants in backend/services/loginOtpService.js and
-// backend/services/loginPinService.js. Both are the same 6 digits.
+// Mirrors the server constants.
+// Both OTP and PIN are 6 digits.
 const OTP_LENGTH = 6;
 const PIN_LENGTH = 6;
+
 const DIGITS_ONLY = /^\d{6}$/;
 
-// The server enforces this cooldown itself and answers 429 with the remaining
-// seconds. Mirroring it here means the button is simply disabled instead of
-// inviting a click that is guaranteed to fail.
 const RESEND_COOLDOWN_SECONDS = 60;
 
 const STEP_IDENTIFIER = 'identifier';
@@ -56,24 +54,15 @@ const heading = {
 };
 
 const subheading = {
-  [STEP_IDENTIFIER]: 'Use a one-time code or a 6-digit PIN instead of a password.',
+  [STEP_IDENTIFIER]:
+    'Use a one-time code or a 6-digit PIN instead of a password.',
   [STEP_METHOD]: 'How would you like to sign in today?',
   [STEP_OTP]: 'We sent a 6-digit code to your {destination}.',
   [STEP_PIN]: 'Enter the 6-digit PIN you created for this account.',
-  [STEP_SET_PIN]: 'Choose a 6-digit PIN for faster sign-in next time.',
+  [STEP_SET_PIN]:
+    'Choose a 6-digit PIN for faster sign-in next time.',
 };
 
-/**
- * Optional OTP / PIN sign-in.
- *
- * This is a SEPARATE page rather than a mode inside LoginPage, which is why the
- * existing login form, its validation and its submit handler are untouched: the
- * only thing LoginPage gains is a link to get here.
- *
- * On success it stores the token exactly as AuthContext.login does and then
- * re-hydrates through AuthContext.refreshUser(), so every downstream consumer
- * (/api/auth/me, the axios interceptor, the route guards) is unchanged.
- */
 export const OtpPinLoginPage = () => {
   const navigate = useNavigate();
 
@@ -85,8 +74,6 @@ export const OtpPinLoginPage = () => {
 
   const [identifier, setIdentifier] = useState('');
 
-  // What the server reported about the account, used to decide which buttons to
-  // render and how to describe the destination.
   const [account, setAccount] = useState(null);
 
   const [secret, setSecret] = useState('');
@@ -104,14 +91,30 @@ export const OtpPinLoginPage = () => {
 
   const [pinSetupToken, setPinSetupToken] = useState(null);
 
-  // Digits only, and never more than 6, so the field cannot hold anything the
-  // server would reject. `maxLength` alone still allows letters through.
+  // =========================================================
+  // COMMON HELPERS
+  // =========================================================
+
   const handleSecretChange = (value) => {
-    setSecret(String(value).replace(/\D/g, '').slice(0, OTP_LENGTH));
+    setSecret(
+      String(value)
+        .replace(/\D/g, '')
+        .slice(0, OTP_LENGTH)
+    );
+  };
+
+  const handlePinChange = (value, setter) => {
+    setter(
+      String(value)
+        .replace(/\D/g, '')
+        .slice(0, PIN_LENGTH)
+    );
   };
 
   useEffect(() => {
-    if (cooldown <= 0) return undefined;
+    if (cooldown <= 0) {
+      return undefined;
+    }
 
     const timer = setInterval(() => {
       setCooldown((seconds) => Math.max(0, seconds - 1));
@@ -120,7 +123,7 @@ export const OtpPinLoginPage = () => {
     return () => clearInterval(timer);
   }, [cooldown]);
 
-  // Leaving this page must not leave a code sitting in state for the next visit.
+  // Clear sensitive values when page unmounts.
   useEffect(() => {
     return () => {
       setSecret('');
@@ -130,69 +133,94 @@ export const OtpPinLoginPage = () => {
     };
   }, []);
 
-  /**
-   * Mirrors LoginPage.redirectByRole: the landing page comes from the role the
-   * SERVER reported, never from client state. The role is read back from
-   * /api/auth/me via refreshUser() rather than from the sign-in response, so it
-   * is the live value.
-   */
+  // =========================================================
+  // REDIRECT
+  // =========================================================
+
   const redirectByRole = (role) => {
     const target = roleHomePath(role);
 
     if (!target) {
-      showToast('Your account role could not be verified.', 'error');
+      showToast(
+        'Your account role could not be verified.',
+        'error'
+      );
 
       return false;
     }
 
-    navigate('/', { replace: true });
+    navigate('/', {
+      replace: true,
+    });
 
     return true;
   };
 
-  /**
-   * Adopts a session the way AuthContext.login does: persist the token, then let
-   * AuthContext re-hydrate the user (and their membership) from the existing
-   * /api/auth/me endpoint. Nothing about the session mechanism is new.
-   */
+  // =========================================================
+  // COMPLETE SIGN IN
+  // =========================================================
+
   const completeSignIn = async (data) => {
     const token = data?.token;
 
     if (!token) {
-      showToast('Sign-in response did not include a token', 'error');
+      showToast(
+        'Sign-in response did not include a token.',
+        'error'
+      );
 
       return false;
     }
 
+    // Store JWT exactly like normal login.
     setStoredToken(token);
 
     const currentUser = await refreshUser();
 
     if (!currentUser) {
-      showToast('Sign-in could not be completed. Please try again.', 'error');
+      showToast(
+        'Sign-in could not be completed. Please try again.',
+        'error'
+      );
 
       return false;
     }
 
-    showToast('Welcome back! Logged in successfully.', 'success');
+    showToast(
+      'Welcome back! Logged in successfully.',
+      'success'
+    );
 
-    return redirectByRole(normalizeRole(currentUser.role));
+    return redirectByRole(
+      normalizeRole(currentUser.role)
+    );
   };
+
+  // =========================================================
+  // IDENTIFIER VALIDATION
+  // =========================================================
 
   const validateIdentifier = () => {
     const trimmed = identifier.trim();
 
     if (!trimmed) {
-      setError('Email address or mobile number is required.');
+      setError(
+        'Email address or mobile number is required.'
+      );
 
       return false;
     }
 
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+    const isEmail =
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
+
+    if (!isEmail) {
       const digits = trimmed.replace(/\D/g, '');
 
       if (digits.length < 10 || digits.length > 15) {
-        setError('Enter a valid email address or mobile number.');
+        setError(
+          'Enter a valid email address or mobile number.'
+        );
 
         return false;
       }
@@ -203,17 +231,27 @@ export const OtpPinLoginPage = () => {
     return true;
   };
 
+  // =========================================================
+  // IDENTIFY ACCOUNT
+  // =========================================================
+
   const handleIdentify = async (event) => {
     event.preventDefault();
 
-    if (!validateIdentifier()) return;
+    if (!validateIdentifier()) {
+      return;
+    }
 
     setIsBusy(true);
+    setError('');
 
     try {
-      const res = await api.post('/auth/otp-pin/identify', {
-        identifier: identifier.trim(),
-      });
+      const res = await api.post(
+        '/auth/otp-pin/identify',
+        {
+          identifier: identifier.trim(),
+        }
+      );
 
       const data = res.data.data || {};
 
@@ -222,9 +260,11 @@ export const OtpPinLoginPage = () => {
       setSecret('');
       setError('');
 
-      // Nothing to sign in with is a dead end, so say so up front rather than
-      // letting the user pick a method that is guaranteed to fail.
-      if (data.channel === 'sms' && data.smsConfigured === false) {
+      // SMS is not configured.
+      if (
+        data.channel === 'sms' &&
+        data.smsConfigured === false
+      ) {
         setError(
           'SMS delivery is not configured on this server, so codes cannot be sent to a mobile number yet. Please use your email address.'
         );
@@ -243,34 +283,56 @@ export const OtpPinLoginPage = () => {
     }
   };
 
+  // =========================================================
+  // SEND OTP
+  // =========================================================
+
   const handleSendOtp = async () => {
     setIsBusy(true);
     setError('');
     setAttemptsRemaining(null);
 
     try {
-      const res = await api.post('/auth/otp-pin/send-otp', {
-        identifier,
-      });
+      const res = await api.post(
+        '/auth/otp-pin/send-otp',
+        {
+          identifier,
+        }
+      );
 
       const data = res.data.data || {};
 
       setSecret('');
-      setCooldown(Number(data.resendCooldownSeconds) || RESEND_COOLDOWN_SECONDS);
+
+      setCooldown(
+        Number(data.resendCooldownSeconds) ||
+          RESEND_COOLDOWN_SECONDS
+      );
 
       if (data.destination) {
-        setAccount((current) => ({ ...(current || {}), destination: data.destination }));
+        setAccount((current) => ({
+          ...(current || {}),
+          destination: data.destination,
+        }));
       }
 
-      showToast(`A ${data.otpLength || OTP_LENGTH}-digit sign-in code has been sent.`, 'success');
+      showToast(
+        `A ${
+          data.otpLength || OTP_LENGTH
+        }-digit sign-in code has been sent.`,
+        'success'
+      );
 
       setStep(STEP_OTP);
     } catch (err) {
-      // A 429 means the server's own cooldown is still running, so adopt the
-      // remaining seconds it reported rather than leaving the button enabled.
-      const retryAfter = Number(err.response?.data?.errors?.retryAfter);
+      const retryAfter = Number(
+        err.response?.data?.errors?.retryAfter
+      );
 
-      if (Number.isFinite(retryAfter) && retryAfter > 0) {
+      if (
+        Number.isFinite(retryAfter) &&
+        retryAfter > 0
+      ) {
         setCooldown(retryAfter);
       }
 
@@ -283,11 +345,17 @@ export const OtpPinLoginPage = () => {
     }
   };
 
+  // =========================================================
+  // VERIFY OTP
+  // =========================================================
+
   const handleVerifyOtp = async (event) => {
     event.preventDefault();
 
     if (!DIGITS_ONLY.test(secret)) {
-      setError(`Please enter the ${OTP_LENGTH}-digit sign-in code.`);
+      setError(
+        `Please enter the ${OTP_LENGTH}-digit sign-in code.`
+      );
 
       return;
     }
@@ -297,33 +365,70 @@ export const OtpPinLoginPage = () => {
     setAttemptsRemaining(null);
 
     try {
-      const res = await api.post('/auth/otp-pin/verify-otp', {
-        identifier,
-        otp: secret,
-      });
+      const res = await api.post(
+        '/auth/otp-pin/verify-otp',
+        {
+          identifier,
+          otp: secret,
+        }
+      );
 
       const data = res.data.data || {};
 
       setSecret('');
 
-      // A brand-new account gets one short-lived offer to set a PIN, because
-      // that is the only moment a PIN may be created.
+      // =====================================================
+      // IMPORTANT FIX
+      // =====================================================
+      //
+      // OTP verification has already authenticated the user.
+      // The backend returns a JWT along with pinSetupToken.
+      //
+      // We MUST store the JWT before moving to Create PIN.
+      // Otherwise:
+      //
+      // PUT /auth/otp-pin/pin
+      //
+      // receives no Authorization header and returns 401.
+      //
       if (data.pinSetup && data.pinSetupToken) {
+        if (!data.token) {
+          setError(
+            'Authentication token was not returned after OTP verification. Please sign in again.'
+          );
+
+          return;
+        }
+
+        // ⭐ CRITICAL FIX
+        setStoredToken(data.token);
+
         setPinSetupToken(data.pinSetupToken);
+
         setPin('');
         setConfirmPin('');
+
         setStep(STEP_SET_PIN);
 
-        showToast('Signed in. You can now create a PIN for next time.', 'success');
+        showToast(
+          'Signed in. You can now create a PIN for next time.',
+          'success'
+        );
 
         return;
       }
 
+      // Normal OTP login.
       await completeSignIn(data);
     } catch (err) {
-      const remaining = Number(err.response?.data?.errors?.attemptsRemaining);
+      const remaining = Number(
+        err.response?.data?.errors?.attemptsRemaining
+      );
 
-      if (Number.isFinite(remaining) && remaining >= 0) {
+      if (
+        Number.isFinite(remaining) &&
+        remaining >= 0
+      ) {
         setAttemptsRemaining(remaining);
       }
 
@@ -338,11 +443,17 @@ export const OtpPinLoginPage = () => {
     }
   };
 
+  // =========================================================
+  // VERIFY EXISTING PIN
+  // =========================================================
+
   const handleVerifyPin = async (event) => {
     event.preventDefault();
 
     if (!DIGITS_ONLY.test(secret)) {
-      setError(`Please enter the ${PIN_LENGTH}-digit PIN.`);
+      setError(
+        `Please enter the ${PIN_LENGTH}-digit PIN.`
+      );
 
       return;
     }
@@ -352,42 +463,69 @@ export const OtpPinLoginPage = () => {
     setAttemptsRemaining(null);
 
     try {
-      const res = await api.post('/auth/otp-pin/verify-pin', {
-        identifier,
-        pin: secret,
-      });
+      const res = await api.post(
+        '/auth/otp-pin/verify-pin',
+        {
+          identifier,
+          pin: secret,
+        }
+      );
 
       setSecret('');
 
-      await completeSignIn(res.data.data || {});
+      await completeSignIn(
+        res.data.data || {}
+      );
     } catch (err) {
-      const remaining = Number(err.response?.data?.errors?.attemptsRemaining);
+      const remaining = Number(
+        err.response?.data?.errors?.attemptsRemaining
+      );
 
-      if (Number.isFinite(remaining) && remaining >= 0) {
+      if (
+        Number.isFinite(remaining) &&
+        remaining >= 0
+      ) {
         setAttemptsRemaining(remaining);
       }
 
       setSecret('');
 
       setError(
-        err.response?.data?.message || 'The PIN is incorrect. Please try again.'
+        err.response?.data?.message ||
+          'The PIN is incorrect. Please try again.'
       );
     } finally {
       setIsBusy(false);
     }
   };
 
+  // =========================================================
+  // CREATE PIN
+  // =========================================================
+
   const handleCreatePin = async (event) => {
     event.preventDefault();
 
     if (!DIGITS_ONLY.test(pin)) {
-      setError(`The PIN must be exactly ${PIN_LENGTH} digits.`);
+      setError(
+        `The PIN must be exactly ${PIN_LENGTH} digits.`
+      );
 
       return;
     }
 
     if (pin !== confirmPin) {
-      setError('The two PINs do not match.');
+      setError(
+        'The two PINs do not match.'
+      );
+
+      return;
+    }
+
+    if (!pinSetupToken) {
+      setError(
+        'PIN setup session has expired. Please verify the OTP again.'
+      );
 
       return;
     }
@@ -396,52 +534,78 @@ export const OtpPinLoginPage = () => {
     setError('');
 
     try {
-      const res = await api.put('/auth/otp-pin/pin', {
-        pin,
-        confirmPin,
-        setupToken: pinSetupToken,
-      });
+      const res = await api.put(
+        '/auth/otp-pin/pin',
+        {
+          pin,
+          confirmPin,
+          setupToken: pinSetupToken,
+        }
+      );
 
       setPin('');
       setConfirmPin('');
       setPinSetupToken(null);
 
       showToast(
-        res.data.message || 'PIN created successfully.',
+        res.data.message ||
+          'PIN created successfully.',
         'success'
       );
 
-      // The session was already established by the OTP verification, so this
-      // re-hydrates through the same path and lands on the same page a normal
-      // sign-in would.
+      // Re-hydrate logged-in user.
       const currentUser = await refreshUser();
 
       if (currentUser) {
-        redirectByRole(normalizeRole(currentUser.role));
+        redirectByRole(
+          normalizeRole(currentUser.role)
+        );
       } else {
-        navigate('/', { replace: true });
+        setError(
+          'PIN was created, but the user session could not be loaded.'
+        );
       }
     } catch (err) {
+      // Handle expired/missing JWT.
+      if (err.response?.status === 401) {
+        setPinSetupToken(null);
+
+        setError(
+          'Your authentication session has expired. Please verify the OTP again.'
+        );
+
+        return;
+      }
+
       setError(
-        err.response?.data?.message || 'The PIN could not be created.'
+        err.response?.data?.message ||
+          'The PIN could not be created. Please try again.'
       );
     } finally {
       setIsBusy(false);
     }
   };
 
+  // =========================================================
+  // BACK / SKIP
+  // =========================================================
+
   const goBack = () => {
     setError('');
     setSecret('');
 
     if (step === STEP_SET_PIN) {
-      // Skipping the offer is always allowed - the PIN is optional.
       setPinSetupToken(null);
+
       refreshUser().then((currentUser) => {
         if (currentUser) {
-          redirectByRole(normalizeRole(currentUser.role));
+          redirectByRole(
+            normalizeRole(currentUser.role)
+          );
         } else {
-          navigate('/', { replace: true });
+          navigate('/', {
+            replace: true,
+          });
         }
       });
 
@@ -459,16 +623,29 @@ export const OtpPinLoginPage = () => {
 
   const isSms = account?.channel === 'sms';
 
+  // =========================================================
+  // UI
+  // =========================================================
+
   return (
     <div
       className="site-wrapper"
-      style={{ margin: '48px auto 80px', maxWidth: '460px' }}
+      style={{
+        margin: '48px auto 80px',
+        maxWidth: '460px',
+      }}
       id="otp-pin-login-page-container"
     >
       <div
         className="card"
-        style={{ padding: '36px 32px' }}
+        style={{
+          padding: '36px 32px',
+        }}
       >
+        {/* =================================================
+            HEADER
+        ================================================= */}
+
         <div
           style={{
             display: 'flex',
@@ -487,7 +664,8 @@ export const OtpPinLoginPage = () => {
             style={{
               fontSize: '24px',
               fontWeight: 800,
-              color: 'var(--text-primary, #0f172a)',
+              color:
+                'var(--text-primary, #0f172a)',
               margin: '16px 0 6px',
             }}
           >
@@ -501,9 +679,12 @@ export const OtpPinLoginPage = () => {
               margin: 0,
             }}
           >
-            {String(subheading[step]).replace(
+            {String(
+              subheading[step]
+            ).replace(
               '{destination}',
-              account?.destination || 'your contact details'
+              account?.destination ||
+                'your contact details'
             )}
           </p>
         </div>
@@ -519,7 +700,9 @@ export const OtpPinLoginPage = () => {
           >
             <div
               className="form-group"
-              style={{ marginBottom: '20px' }}
+              style={{
+                marginBottom: '20px',
+              }}
             >
               <label
                 className="form-label"
@@ -528,15 +711,21 @@ export const OtpPinLoginPage = () => {
                 {label[STEP_IDENTIFIER]}
               </label>
 
-              <div style={{ position: 'relative' }}>
+              <div
+                style={{
+                  position: 'relative',
+                }}
+              >
                 <Mail
                   size={18}
                   style={{
                     position: 'absolute',
                     left: '14px',
                     top: '50%',
-                    transform: 'translateY(-50%)',
-                    color: 'var(--text-light)',
+                    transform:
+                      'translateY(-50%)',
+                    color:
+                      'var(--text-light)',
                     pointerEvents: 'none',
                   }}
                 />
@@ -548,10 +737,16 @@ export const OtpPinLoginPage = () => {
                   inputMode="email"
                   autoComplete="username"
                   value={identifier}
-                  onChange={(e) => setIdentifier(e.target.value)}
+                  onChange={(e) =>
+                    setIdentifier(
+                      e.target.value
+                    )
+                  }
                   placeholder="Enter your email or mobile number"
                   disabled={isBusy}
-                  style={{ paddingLeft: '44px' }}
+                  style={{
+                    paddingLeft: '44px',
+                  }}
                 />
               </div>
             </div>
@@ -561,20 +756,26 @@ export const OtpPinLoginPage = () => {
                 id="otp-pin-error"
                 style={{
                   display: 'flex',
-                  alignItems: 'flex-start',
+                  alignItems:
+                    'flex-start',
                   gap: '10px',
                   background: '#fee2e2',
-                  border: '1px solid #fecaca',
+                  border:
+                    '1px solid #fecaca',
                   color: '#b91c1c',
                   padding: '12px 14px',
-                  borderRadius: 'var(--radius-md, 8px)',
+                  borderRadius:
+                    'var(--radius-md, 8px)',
                   fontSize: '13px',
                   marginBottom: '20px',
                 }}
               >
                 <AlertCircle
                   size={16}
-                  style={{ flexShrink: 0, marginTop: 1 }}
+                  style={{
+                    flexShrink: 0,
+                    marginTop: 1,
+                  }}
                 />
 
                 <span>{error}</span>
@@ -586,7 +787,9 @@ export const OtpPinLoginPage = () => {
               className="btn btn-primary btn-lg"
               id="otp-pin-continue-btn"
               disabled={isBusy}
-              style={{ width: '100%' }}
+              style={{
+                width: '100%',
+              }}
             >
               Continue
 
@@ -596,7 +799,7 @@ export const OtpPinLoginPage = () => {
         )}
 
         {/* =================================================
-            STEP 2 - CHOOSE A METHOD
+            STEP 2 - CHOOSE METHOD
         ================================================= */}
 
         {step === STEP_METHOD && (
@@ -607,10 +810,12 @@ export const OtpPinLoginPage = () => {
                 alignItems: 'center',
                 gap: '10px',
                 background: '#eff6ff',
-                border: '1px solid #bfdbfe',
+                border:
+                  '1px solid #bfdbfe',
                 color: '#1d4ed8',
                 padding: '12px 14px',
-                borderRadius: 'var(--radius-md, 8px)',
+                borderRadius:
+                  'var(--radius-md, 8px)',
                 fontSize: '13px',
                 marginBottom: '20px',
                 wordBreak: 'break-all',
@@ -619,16 +824,22 @@ export const OtpPinLoginPage = () => {
               {isSms ? (
                 <Smartphone
                   size={16}
-                  style={{ flexShrink: 0 }}
+                  style={{
+                    flexShrink: 0,
+                  }}
                 />
               ) : (
                 <Mail
                   size={16}
-                  style={{ flexShrink: 0 }}
+                  style={{
+                    flexShrink: 0,
+                  }}
                 />
               )}
 
-              <span>{account?.destination}</span>
+              <span>
+                {account?.destination}
+              </span>
             </div>
 
             {error && (
@@ -636,20 +847,26 @@ export const OtpPinLoginPage = () => {
                 id="otp-pin-error"
                 style={{
                   display: 'flex',
-                  alignItems: 'flex-start',
+                  alignItems:
+                    'flex-start',
                   gap: '10px',
                   background: '#fee2e2',
-                  border: '1px solid #fecaca',
+                  border:
+                    '1px solid #fecaca',
                   color: '#b91c1c',
                   padding: '12px 14px',
-                  borderRadius: 'var(--radius-md, 8px)',
+                  borderRadius:
+                    'var(--radius-md, 8px)',
                   fontSize: '13px',
                   marginBottom: '20px',
                 }}
               >
                 <AlertCircle
                   size={16}
-                  style={{ flexShrink: 0, marginTop: 1 }}
+                  style={{
+                    flexShrink: 0,
+                    marginTop: 1,
+                  }}
                 />
 
                 <span>{error}</span>
@@ -662,7 +879,10 @@ export const OtpPinLoginPage = () => {
               id="otp-pin-send-otp-btn"
               onClick={handleSendOtp}
               disabled={isBusy}
-              style={{ width: '100%', marginBottom: '12px' }}
+              style={{
+                width: '100%',
+                marginBottom: '12px',
+              }}
             >
               <Mail size={18} />
 
@@ -682,7 +902,9 @@ export const OtpPinLoginPage = () => {
                   setStep(STEP_PIN);
                 }}
                 disabled={isBusy}
-                style={{ width: '100%' }}
+                style={{
+                  width: '100%',
+                }}
               >
                 <KeyRound size={18} />
 
@@ -692,20 +914,22 @@ export const OtpPinLoginPage = () => {
               <p
                 style={{
                   fontSize: '13px',
-                  color: 'var(--text-muted)',
+                  color:
+                    'var(--text-muted)',
                   textAlign: 'center',
                   margin: '4px 0 0',
                 }}
               >
-                You have not set a PIN yet. Verify a sign-in code and you can
-                create one.
+                You have not set a PIN yet.
+                Verify a sign-in code and you
+                can create one.
               </p>
             )}
           </div>
         )}
 
         {/* =================================================
-            STEP 2a - ENTER THE CODE
+            STEP 3 - OTP
         ================================================= */}
 
         {step === STEP_OTP && (
@@ -715,7 +939,9 @@ export const OtpPinLoginPage = () => {
           >
             <div
               className="form-group"
-              style={{ marginBottom: '20px' }}
+              style={{
+                marginBottom: '20px',
+              }}
             >
               <label
                 className="form-label"
@@ -732,7 +958,11 @@ export const OtpPinLoginPage = () => {
                 autoComplete="one-time-code"
                 maxLength={OTP_LENGTH}
                 value={secret}
-                onChange={(e) => handleSecretChange(e.target.value)}
+                onChange={(e) =>
+                  handleSecretChange(
+                    e.target.value
+                  )
+                }
                 placeholder="000000"
                 disabled={isBusy}
                 style={{
@@ -748,13 +978,17 @@ export const OtpPinLoginPage = () => {
               <p
                 style={{
                   fontSize: '12px',
-                  color: 'var(--text-muted)',
+                  color:
+                    'var(--text-muted)',
                   textAlign: 'center',
                   margin: '-8px 0 16px',
                 }}
               >
                 {attemptsRemaining}{' '}
-                {attemptsRemaining === 1 ? 'attempt' : 'attempts'} remaining
+                {attemptsRemaining === 1
+                  ? 'attempt'
+                  : 'attempts'}{' '}
+                remaining
               </p>
             )}
 
@@ -763,20 +997,26 @@ export const OtpPinLoginPage = () => {
                 id="otp-pin-error"
                 style={{
                   display: 'flex',
-                  alignItems: 'flex-start',
+                  alignItems:
+                    'flex-start',
                   gap: '10px',
                   background: '#fee2e2',
-                  border: '1px solid #fecaca',
+                  border:
+                    '1px solid #fecaca',
                   color: '#b91c1c',
                   padding: '12px 14px',
-                  borderRadius: 'var(--radius-md, 8px)',
+                  borderRadius:
+                    'var(--radius-md, 8px)',
                   fontSize: '13px',
                   marginBottom: '20px',
                 }}
               >
                 <AlertCircle
                   size={16}
-                  style={{ flexShrink: 0, marginTop: 1 }}
+                  style={{
+                    flexShrink: 0,
+                    marginTop: 1,
+                  }}
                 />
 
                 <span>{error}</span>
@@ -788,7 +1028,9 @@ export const OtpPinLoginPage = () => {
               className="btn btn-primary btn-lg"
               id="otp-pin-verify-otp-btn"
               disabled={isBusy}
-              style={{ width: '100%' }}
+              style={{
+                width: '100%',
+              }}
             >
               Verify and Sign In
 
@@ -798,7 +1040,8 @@ export const OtpPinLoginPage = () => {
             <div
               style={{
                 display: 'flex',
-                justifyContent: 'space-between',
+                justifyContent:
+                  'space-between',
                 alignItems: 'center',
                 marginTop: '16px',
                 gap: '12px',
@@ -809,7 +1052,10 @@ export const OtpPinLoginPage = () => {
                 className="btn btn-sm"
                 onClick={goBack}
                 disabled={isBusy}
-                style={{ background: 'transparent', border: 'none' }}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                }}
               >
                 <ArrowLeft size={14} />
 
@@ -820,17 +1066,24 @@ export const OtpPinLoginPage = () => {
                 type="button"
                 className="btn btn-sm"
                 onClick={handleSendOtp}
-                disabled={isBusy || cooldown > 0}
-                style={{ background: 'transparent', border: 'none' }}
+                disabled={
+                  isBusy || cooldown > 0
+                }
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                }}
               >
-                {cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend code'}
+                {cooldown > 0
+                  ? `Resend in ${cooldown}s`
+                  : 'Resend code'}
               </button>
             </div>
           </form>
         )}
 
         {/* =================================================
-            STEP 2b - ENTER THE PIN
+            STEP 4 - EXISTING PIN
         ================================================= */}
 
         {step === STEP_PIN && (
@@ -840,7 +1093,9 @@ export const OtpPinLoginPage = () => {
           >
             <div
               className="form-group"
-              style={{ marginBottom: '20px' }}
+              style={{
+                marginBottom: '20px',
+              }}
             >
               <label
                 className="form-label"
@@ -857,7 +1112,11 @@ export const OtpPinLoginPage = () => {
                 autoComplete="off"
                 maxLength={PIN_LENGTH}
                 value={secret}
-                onChange={(e) => handleSecretChange(e.target.value)}
+                onChange={(e) =>
+                  handleSecretChange(
+                    e.target.value
+                  )
+                }
                 placeholder="000000"
                 disabled={isBusy}
                 style={{
@@ -873,13 +1132,17 @@ export const OtpPinLoginPage = () => {
               <p
                 style={{
                   fontSize: '12px',
-                  color: 'var(--text-muted)',
+                  color:
+                    'var(--text-muted)',
                   textAlign: 'center',
                   margin: '-8px 0 16px',
                 }}
               >
                 {attemptsRemaining}{' '}
-                {attemptsRemaining === 1 ? 'attempt' : 'attempts'} remaining
+                {attemptsRemaining === 1
+                  ? 'attempt'
+                  : 'attempts'}{' '}
+                remaining
               </p>
             )}
 
@@ -888,20 +1151,26 @@ export const OtpPinLoginPage = () => {
                 id="otp-pin-error"
                 style={{
                   display: 'flex',
-                  alignItems: 'flex-start',
+                  alignItems:
+                    'flex-start',
                   gap: '10px',
                   background: '#fee2e2',
-                  border: '1px solid #fecaca',
+                  border:
+                    '1px solid #fecaca',
                   color: '#b91c1c',
                   padding: '12px 14px',
-                  borderRadius: 'var(--radius-md, 8px)',
+                  borderRadius:
+                    'var(--radius-md, 8px)',
                   fontSize: '13px',
                   marginBottom: '20px',
                 }}
               >
                 <AlertCircle
                   size={16}
-                  style={{ flexShrink: 0, marginTop: 1 }}
+                  style={{
+                    flexShrink: 0,
+                    marginTop: 1,
+                  }}
                 />
 
                 <span>{error}</span>
@@ -913,20 +1182,30 @@ export const OtpPinLoginPage = () => {
               className="btn btn-primary btn-lg"
               id="otp-pin-verify-pin-btn"
               disabled={isBusy}
-              style={{ width: '100%' }}
+              style={{
+                width: '100%',
+              }}
             >
               Sign In with PIN
 
               <ArrowRight size={18} />
             </button>
 
-            <div style={{ marginTop: '16px', textAlign: 'center' }}>
+            <div
+              style={{
+                marginTop: '16px',
+                textAlign: 'center',
+              }}
+            >
               <button
                 type="button"
                 className="btn btn-sm"
                 onClick={goBack}
                 disabled={isBusy}
-                style={{ background: 'transparent', border: 'none' }}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                }}
               >
                 <ArrowLeft size={14} />
 
@@ -937,8 +1216,7 @@ export const OtpPinLoginPage = () => {
         )}
 
         {/* =================================================
-            OFFER - CREATE A PIN (only offered right after a
-            verified sign-in code, and always skippable)
+            STEP 5 - CREATE PIN
         ================================================= */}
 
         {step === STEP_SET_PIN && (
@@ -948,7 +1226,9 @@ export const OtpPinLoginPage = () => {
           >
             <div
               className="form-group"
-              style={{ marginBottom: '16px' }}
+              style={{
+                marginBottom: '16px',
+              }}
             >
               <label
                 className="form-label"
@@ -965,7 +1245,12 @@ export const OtpPinLoginPage = () => {
                 autoComplete="new-password"
                 maxLength={PIN_LENGTH}
                 value={pin}
-                onChange={(e) => setPin(e.target.value.replace(/\D/g, '').slice(0, PIN_LENGTH))}
+                onChange={(e) =>
+                  handlePinChange(
+                    e.target.value,
+                    setPin
+                  )
+                }
                 placeholder="000000"
                 disabled={isBusy}
                 style={{
@@ -979,7 +1264,9 @@ export const OtpPinLoginPage = () => {
 
             <div
               className="form-group"
-              style={{ marginBottom: '20px' }}
+              style={{
+                marginBottom: '20px',
+              }}
             >
               <label
                 className="form-label"
@@ -996,7 +1283,12 @@ export const OtpPinLoginPage = () => {
                 autoComplete="new-password"
                 maxLength={PIN_LENGTH}
                 value={confirmPin}
-                onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, '').slice(0, PIN_LENGTH))}
+                onChange={(e) =>
+                  handlePinChange(
+                    e.target.value,
+                    setConfirmPin
+                  )
+                }
                 placeholder="000000"
                 disabled={isBusy}
                 style={{
@@ -1013,20 +1305,26 @@ export const OtpPinLoginPage = () => {
                 id="otp-pin-error"
                 style={{
                   display: 'flex',
-                  alignItems: 'flex-start',
+                  alignItems:
+                    'flex-start',
                   gap: '10px',
                   background: '#fee2e2',
-                  border: '1px solid #fecaca',
+                  border:
+                    '1px solid #fecaca',
                   color: '#b91c1c',
                   padding: '12px 14px',
-                  borderRadius: 'var(--radius-md, 8px)',
+                  borderRadius:
+                    'var(--radius-md, 8px)',
                   fontSize: '13px',
                   marginBottom: '20px',
                 }}
               >
                 <AlertCircle
                   size={16}
-                  style={{ flexShrink: 0, marginTop: 1 }}
+                  style={{
+                    flexShrink: 0,
+                    marginTop: 1,
+                  }}
                 />
 
                 <span>{error}</span>
@@ -1038,20 +1336,30 @@ export const OtpPinLoginPage = () => {
               className="btn btn-primary btn-lg"
               id="otp-pin-create-btn"
               disabled={isBusy}
-              style={{ width: '100%' }}
+              style={{
+                width: '100%',
+              }}
             >
               Create PIN
 
               <ArrowRight size={18} />
             </button>
 
-            <div style={{ marginTop: '16px', textAlign: 'center' }}>
+            <div
+              style={{
+                marginTop: '16px',
+                textAlign: 'center',
+              }}
+            >
               <button
                 type="button"
                 className="btn btn-sm"
                 onClick={goBack}
                 disabled={isBusy}
-                style={{ background: 'transparent', border: 'none' }}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                }}
               >
                 Skip for now
               </button>
@@ -1078,7 +1386,10 @@ export const OtpPinLoginPage = () => {
             >
               <ShieldCheck size={14} />
 
-              <span>Your sign-in information is securely protected.</span>
+              <span>
+                Your sign-in information is securely
+                protected.
+              </span>
             </div>
 
             <div
@@ -1086,7 +1397,8 @@ export const OtpPinLoginPage = () => {
                 textAlign: 'center',
                 marginTop: '20px',
                 paddingTop: '20px',
-                borderTop: '1px solid var(--border-color)',
+                borderTop:
+                  '1px solid var(--border-color)',
                 fontSize: '14px',
                 color: 'var(--text-muted)',
               }}
