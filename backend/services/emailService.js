@@ -3,123 +3,40 @@ import dns from 'node:dns';
 
 /**
  * =====================================================
- * OUTBOUND MAIL TRANSPORT
+ * OUTBOUND MAIL SERVICE
  * =====================================================
  *
- * Delivery modes:
+ * Priority:
+ * 1. Resend - when RESEND_API_KEY is configured
+ * 2. SMTP   - fallback when complete SMTP credentials exist
+ * 3. Console / Ethereal / Disabled - development modes
  *
- * smtp      Real email delivery.
- *           Required in production.
- *
- * ethereal  Development / QA only.
- *
- * console   No email is sent.
- *
- * disabled  No usable configuration.
- *
+ * Production:
+ * Resend or SMTP is required.
  * =====================================================
  */
 
-const PROD_MODES_ALLOWED = new Set(['smtp']);
+const PROD_MODES_ALLOWED = new Set(['resend', 'smtp']);
 
 let transporterPromise = null;
 let resolvedMode = null;
 let resolvedFrom = null;
 
-const SMTP_TIMEOUT_MS =
-  Number(process.env.SMTP_TIMEOUT_MS) || 15000;
-
 /**
  * =====================================================
- * SMTP IPv4 RESOLUTION
- * =====================================================
- *
- * Railway was attempting to connect to Gmail through IPv6:
- *
- * ENETUNREACH 2607:f8b0:....
- *
- * Therefore we explicitly resolve smtp.gmail.com to IPv4
- * before creating the Nodemailer transport.
- *
- * Nodemailer receives the IPv4 address directly.
- * TLS still uses smtp.gmail.com as the server name.
- *
+ * COMMON CONFIG
  * =====================================================
  */
 
-async function resolveSmtpIPv4(host) {
-  const addresses =
-    await dns.promises.resolve4(host);
-
-  if (
-    !addresses ||
-    addresses.length === 0
-  ) {
-    throw new Error(
-      `No IPv4 address found for SMTP host ${host}`
-    );
-  }
-
-  const ipv4Address = addresses[0];
-
-  console.log(
-    `[Email] SMTP IPv4 resolved: ${host} -> ${ipv4Address}`
-  );
-
-  return ipv4Address;
-}
-
-/**
- * Everything the log is allowed to know about
- * the transport.
- *
- * Password is never logged.
- */
-function describeConfig() {
-  const user =
-    process.env.SMTP_USER ||
-    process.env.SMTP_USERNAME ||
-    '';
-
-  return {
-    mode: resolvedMode,
-    host: process.env.SMTP_HOST || null,
-    port:
-      Number(process.env.SMTP_PORT) || 587,
-    secure: resolveSecure(),
-
-    authUser: user
-      ? maskLocalPart(user)
-      : null,
-
-    from: resolvedFrom,
-
-    missing:
-      readSmtpCredentials().missing,
-  };
-}
-
-function resolveSecure() {
-  const explicit = String(
-    process.env.SMTP_SECURE || ''
-  ).toLowerCase();
-
-  if (explicit === 'true') {
-    return true;
-  }
-
-  if (explicit === 'false') {
-    return false;
-  }
-
+function isProduction() {
   return (
-    Number(process.env.SMTP_PORT) === 465
+    String(process.env.NODE_ENV || '').toLowerCase() === 'production'
   );
 }
 
 function maskLocalPart(value) {
-  const at =
-    String(value).indexOf('@');
+  const text = String(value || '');
+  const at = text.indexOf('@');
 
   if (at <= 0) {
     return '***';
@@ -127,21 +44,13 @@ function maskLocalPart(value) {
 
   return (
     `${'*'.repeat(Math.min(at, 3))}` +
-    `@${String(value).slice(at + 1)}`
-  );
-}
-
-function isProduction() {
-  return (
-    String(
-      process.env.NODE_ENV || ''
-    ).toLowerCase() === 'production'
+    `@${text.slice(at + 1)}`
   );
 }
 
 /**
  * =====================================================
- * SMTP CREDENTIALS
+ * SMTP CONFIG
  * =====================================================
  */
 
@@ -191,29 +100,178 @@ function readSmtpCredentials() {
     user,
     pass,
     from,
-    complete:
-      missing.length === 0,
+    complete: missing.length === 0,
     missing,
   };
 }
 
+function resolveSecure() {
+  const explicit = String(
+    process.env.SMTP_SECURE || ''
+  ).toLowerCase();
+
+  if (explicit === 'true') {
+    return true;
+  }
+
+  if (explicit === 'false') {
+    return false;
+  }
+
+  return Number(process.env.SMTP_PORT) === 465;
+}
+
+async function resolveSmtpIPv4(host) {
+  const addresses =
+    await dns.promises.resolve4(host);
+
+  if (
+    !addresses ||
+    addresses.length === 0
+  ) {
+    throw new Error(
+      `No IPv4 address found for SMTP host ${host}`
+    );
+  }
+
+  const ipv4Address = addresses[0];
+
+  console.log(
+    `[Email] SMTP IPv4 resolved: ${host} -> ${ipv4Address}`
+  );
+
+  return ipv4Address;
+}
+
+async function buildSmtpTransport() {
+  const {
+    host,
+    user,
+    pass,
+  } = readSmtpCredentials();
+
+  const port =
+    Number(process.env.SMTP_PORT) || 587;
+
+  const secure =
+    resolveSecure();
+
+  const ipv4Address =
+    await resolveSmtpIPv4(host);
+
+  console.log(
+    `[Email] SMTP connecting via IPv4: ${ipv4Address}:${port}`
+  );
+
+  return nodemailer.createTransport({
+    host: ipv4Address,
+
+    port,
+
+    secure,
+
+    requireTLS: !secure,
+
+    tls: {
+      servername: host,
+    },
+
+    connectionTimeout: 30000,
+    greetingTimeout: 30000,
+    socketTimeout: 30000,
+
+    auth: {
+      user,
+      pass,
+    },
+  });
+}
+
 /**
  * =====================================================
- * CONFIGURATION ERROR
+ * RESEND CONFIG
  * =====================================================
  */
 
-function configurationError(missing) {
-  const list =
-    missing && missing.length
-      ? missing.join(', ')
-      : 'the SMTP_* variables';
-
-  return (
-    `Mail transport is not configured. Missing or empty: ${list}. ` +
-    'Set them in the server environment (.env) and restart the backend. ' +
-    'MAIL_MODE=console delivers nothing and is only useful for offline testing.'
+function hasResendConfig() {
+  return Boolean(
+    String(
+      process.env.RESEND_API_KEY || ''
+    ).trim()
   );
+}
+
+function resolveResendFrom() {
+  return (
+    process.env.RESEND_FROM ||
+    '"Velora" <onboarding@resend.dev>'
+  );
+}
+
+/**
+ * Send email using Resend REST API.
+ *
+ * No extra npm package is required.
+ * Node.js fetch is used directly.
+ */
+async function sendViaResend({
+  to,
+  subject,
+  html,
+  text,
+}) {
+  const apiKey =
+    String(
+      process.env.RESEND_API_KEY || ''
+    ).trim();
+
+  if (!apiKey) {
+    throw new Error(
+      'RESEND_API_KEY is not configured'
+    );
+  }
+
+  const from =
+    resolveResendFrom();
+
+  const response = await fetch(
+    'https://api.resend.com/emails',
+    {
+      method: 'POST',
+
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+
+      body: JSON.stringify({
+        from,
+        to: [to],
+        subject,
+        html,
+        text,
+      }),
+    }
+  );
+
+  let data = null;
+
+  try {
+    data = await response.json();
+  } catch {
+    data = null;
+  }
+
+  if (!response.ok) {
+    const message =
+      data?.message ||
+      data?.error ||
+      `Resend API returned HTTP ${response.status}`;
+
+    throw new Error(message);
+  }
+
+  return data;
 }
 
 /**
@@ -229,13 +287,20 @@ function resolveMode() {
     .trim()
     .toLowerCase();
 
-  const creds =
+  /**
+   * Resend has priority.
+   *
+   * This is important for Railway because old SMTP
+   * variables may still exist in the environment.
+   */
+  if (hasResendConfig()) {
+    return 'resend';
+  }
+
+  const smtp =
     readSmtpCredentials();
 
-  /*
-   * Complete SMTP credentials always use SMTP.
-   */
-  if (creds.complete) {
+  if (smtp.complete) {
     return 'smtp';
   }
 
@@ -255,6 +320,13 @@ function resolveMode() {
 }
 
 function resolveFromAddress() {
+  const mode =
+    resolveMode();
+
+  if (mode === 'resend') {
+    return resolveResendFrom();
+  }
+
   return (
     process.env.SMTP_FROM ||
     process.env.EMAIL_FROM ||
@@ -268,100 +340,104 @@ function assertModeAllowed(mode) {
     return;
   }
 
-  if (
-    !PROD_MODES_ALLOWED.has(mode)
-  ) {
+  if (!PROD_MODES_ALLOWED.has(mode)) {
     throw new Error(
       `MAIL_MODE="${mode}" is not permitted when NODE_ENV=production. ` +
-        'Configure SMTP_HOST / SMTP_USER / SMTP_PASSWORD and set MAIL_MODE=smtp.'
+      'Configure RESEND_API_KEY/RESEND_FROM or SMTP credentials.'
     );
   }
 }
 
 /**
  * =====================================================
- * BUILD SMTP TRANSPORT
- * =====================================================
- *
- * IMPORTANT:
- *
- * 1. Resolve smtp.gmail.com using resolve4().
- * 2. Give Nodemailer the IPv4 address directly.
- * 3. Keep TLS servername as smtp.gmail.com.
- *
- * This prevents Railway from attempting:
- *
- * 2607:f8b0:....:587
- *
+ * CONFIGURATION DESCRIPTION
  * =====================================================
  */
 
-async function buildSmtpTransport() {
-  const {
-    host,
-    user,
-    pass,
-  } = readSmtpCredentials();
+function describeConfig() {
+  const mode =
+    resolvedMode ||
+    resolveMode();
 
-  const port =
-    Number(process.env.SMTP_PORT) || 587;
+  const from =
+    resolvedFrom ||
+    resolveFromAddress();
 
-  const secure =
-    resolveSecure();
+  const smtp =
+    readSmtpCredentials();
 
-  /*
-   * Resolve SMTP host to IPv4 before
-   * creating the connection.
-   */
-  const ipv4Address =
-    await resolveSmtpIPv4(host);
+  const resendConfigured =
+    hasResendConfig();
 
-  /*
-   * Log only the resolved IP.
-   * Never log password.
-   */
-  console.log(
-    `[Email] SMTP connecting via IPv4: ${ipv4Address}:${port}`
-  );
+  return {
+    mode,
 
-  return nodemailer.createTransport({
-    /*
-     * IMPORTANT:
-     * Connect directly to IPv4.
-     */
-    host: ipv4Address,
+    host:
+      mode === 'smtp'
+        ? smtp.host || null
+        : mode === 'resend'
+          ? 'api.resend.com'
+          : null,
 
-    port,
+    port:
+      mode === 'smtp'
+        ? Number(process.env.SMTP_PORT) || 587
+        : mode === 'resend'
+          ? 443
+          : null,
 
-    secure,
+    secure:
+      mode === 'smtp'
+        ? resolveSecure()
+        : mode === 'resend'
+          ? true
+          : null,
 
-    /*
-     * Gmail port 587 uses STARTTLS.
-     */
-    requireTLS: !secure,
+    authUser:
+      mode === 'smtp'
+        ? smtp.user
+          ? maskLocalPart(smtp.user)
+          : null
+        : mode === 'resend'
+          ? resendConfigured
+            ? 'configured'
+            : null
+          : null,
 
-    /*
-     * TLS certificate belongs to smtp.gmail.com,
-     * not the raw IPv4 address.
-     */
-    tls: {
-      servername: host,
-    },
+    from,
 
-    connectionTimeout: 30000,
-    greetingTimeout: 30000,
-    socketTimeout: 30000,
-
-    auth: {
-      user,
-      pass,
-    },
-  });
+    missing:
+      mode === 'smtp'
+        ? smtp.missing
+        : mode === 'resend'
+          ? resendConfigured
+            ? []
+            : ['RESEND_API_KEY']
+          : [],
+  };
 }
 
 /**
  * =====================================================
- * GET / VERIFY TRANSPORT
+ * CONFIGURATION ERROR
+ * =====================================================
+ */
+
+function configurationError(missing) {
+  const list =
+    missing && missing.length
+      ? missing.join(', ')
+      : 'mail configuration';
+
+  return (
+    `Mail transport is not configured. Missing or empty: ${list}. ` +
+    'Configure Resend or SMTP credentials and restart the backend.'
+  );
+}
+
+/**
+ * =====================================================
+ * SMTP TRANSPORT
  * =====================================================
  */
 
@@ -369,19 +445,27 @@ async function getTransporter() {
   const mode =
     resolveMode();
 
-  resolvedMode = mode;
+  resolvedMode =
+    mode;
 
   resolvedFrom =
     resolveFromAddress();
 
+  if (mode === 'resend') {
+    /**
+     * Resend does not need Nodemailer transporter.
+     */
+    return null;
+  }
+
   if (mode === 'disabled') {
-    const { missing } =
-      readSmtpCredentials();
+    const {
+      missing,
+    } = readSmtpCredentials();
 
     console.error(
-      `[Email] No usable mail transport configured. ${configurationError(
-        missing
-      )}`
+      `[Email] No usable mail transport configured. ` +
+      configurationError(missing)
     );
 
     return null;
@@ -391,7 +475,7 @@ async function getTransporter() {
 
   if (mode === 'console') {
     console.warn(
-      '[Email] MAIL_MODE=console - NO EMAIL IS SENT. Every send is reported as a failure.'
+      '[Email] MAIL_MODE=console - NO EMAIL IS SENT.'
     );
 
     return null;
@@ -411,7 +495,7 @@ async function getTransporter() {
 
       if (mode === 'ethereal') {
         console.warn(
-          '[Email] MAIL_MODE=ethereal - mail is delivered to a throwaway @ethereal.email sandbox, NOT to the real user inbox.'
+          '[Email] MAIL_MODE=ethereal - emails go to the Ethereal sandbox.'
         );
 
         const testAccount =
@@ -419,41 +503,30 @@ async function getTransporter() {
 
         return nodemailer.createTransport({
           host: 'smtp.ethereal.email',
+
           port: 587,
+
           secure: false,
 
           auth: {
-            user:
-              testAccount.user,
-            pass:
-              testAccount.pass,
+            user: testAccount.user,
+            pass: testAccount.pass,
           },
         });
       }
 
       /**
        * =================================================
-       * REAL SMTP
+       * SMTP
        * =================================================
        */
 
-      /*
-       * IMPORTANT:
-       * buildSmtpTransport() is async now.
-       */
       const transport =
         await buildSmtpTransport();
 
-      /*
-       * Verify Gmail SMTP connection
-       * before using it.
-       */
       try {
         await transport.verify();
       } catch (error) {
-        /*
-         * Do not cache failed transport.
-         */
         transporterPromise = null;
 
         throw new Error(
@@ -487,6 +560,20 @@ export async function logEmailDiagnostics() {
     '[Email] Mail configuration:',
     summary
   );
+
+  /**
+   * Resend:
+   *
+   * We don't make a real email request during startup.
+   * We only confirm that the API key exists.
+   */
+  if (summary.mode === 'resend') {
+    console.log(
+      '[Email] Resend configured successfully - email delivery is ready.'
+    );
+
+    return summary;
+  }
 
   if (
     summary.mode !== 'smtp'
@@ -555,34 +642,34 @@ function buildVerificationHtml(
   otp
 ) {
   return `
-      <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 28px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 28px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
 
-        <h2 style="color: #0f172a; margin-top: 0;">
-          Welcome to Velora, ${fullName}!
-        </h2>
+      <h2 style="color: #0f172a; margin-top: 0;">
+        Welcome to Velora, ${fullName}!
+      </h2>
 
-        <p style="color: #475569; font-size: 16px; line-height: 1.6;">
-          Thank you for signing up. Please verify your email address to activate your account and start shopping.
-        </p>
+      <p style="color: #475569; font-size: 16px; line-height: 1.6;">
+        Thank you for signing up. Please verify your email address to activate your account and start shopping.
+      </p>
 
-        <p style="color: #475569; font-size: 16px; line-height: 1.6; margin: 28px 0 12px;">
-          Your Velora verification code is:
-        </p>
+      <p style="color: #475569; font-size: 16px; line-height: 1.6; margin: 28px 0 12px;">
+        Your Velora verification code is:
+      </p>
 
-        <div style="background-color: #2563eb; color: #ffffff; font-size: 34px; font-weight: 700; letter-spacing: 10px; text-align: center; padding: 20px 0; border-radius: 8px;">
-          ${otp}
-        </div>
-
-        <p style="color: #475569; font-size: 16px; line-height: 1.6; margin: 24px 0 0;">
-          This code expires in 10 minutes.
-        </p>
-
-        <p style="color: #94a3b8; font-size: 12px; margin-top: 32px; border-top: 1px solid #f1f5f9; padding-top: 16px;">
-          Enter this code on the Velora verification page. If you did not create this account, please ignore this email.
-        </p>
-
+      <div style="background-color: #2563eb; color: #ffffff; font-size: 34px; font-weight: 700; letter-spacing: 10px; text-align: center; padding: 20px 0; border-radius: 8px;">
+        ${otp}
       </div>
-    `;
+
+      <p style="color: #475569; font-size: 16px; line-height: 1.6; margin: 24px 0 0;">
+        This code expires in 10 minutes.
+      </p>
+
+      <p style="color: #94a3b8; font-size: 12px; margin-top: 32px; border-top: 1px solid #f1f5f9; padding-top: 16px;">
+        Enter this code on the Velora verification page. If you did not create this account, please ignore this email.
+      </p>
+
+    </div>
+  `;
 }
 
 /**
@@ -596,49 +683,84 @@ function buildResetHtml(
   resetLink
 ) {
   return `
-      <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 28px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 28px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
 
-        <h2 style="color: #0f172a; margin-top: 0;">
-          Password Reset Request
-        </h2>
+      <h2 style="color: #0f172a; margin-top: 0;">
+        Password Reset Request
+      </h2>
 
-        <p style="color: #475569; font-size: 16px; line-height: 1.6;">
-          Hi ${fullName}, we received a request to reset the password for your Velora account.
-          Click the button below to choose a new password.
-        </p>
+      <p style="color: #475569; font-size: 16px; line-height: 1.6;">
+        Hi ${fullName}, we received a request to reset the password for your Velora account.
+        Click the button below to choose a new password.
+      </p>
 
-        <div style="margin: 28px 0;">
-
-          <a
-            href="${resetLink}"
-            style="background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 14px 28px; font-weight: 600; border-radius: 8px; display: inline-block;"
-          >
-            Reset Password
-          </a>
-
-        </div>
-
-        <p style="color: #64748b; font-size: 14px;">
-
-          Or copy and paste this link in your browser:
-
-          <br/>
-
-          <a
-            href="${resetLink}"
-            style="color: #2563eb;"
-          >
-            ${resetLink}
-          </a>
-
-        </p>
-
-        <p style="color: #94a3b8; font-size: 12px; margin-top: 32px; border-top: 1px solid #f1f5f9; padding-top: 16px;">
-          This link will expire in 1 hour. If you did not request a password reset, please ignore this email.
-        </p>
-
+      <div style="margin: 28px 0;">
+        <a
+          href="${resetLink}"
+          style="background-color: #2563eb; color: #ffffff; text-decoration: none; padding: 14px 28px; font-weight: 600; border-radius: 8px; display: inline-block;"
+        >
+          Reset Password
+        </a>
       </div>
-    `;
+
+      <p style="color: #64748b; font-size: 14px;">
+        Or copy and paste this link in your browser:
+        <br/>
+        <a
+          href="${resetLink}"
+          style="color: #2563eb;"
+        >
+          ${resetLink}
+        </a>
+      </p>
+
+      <p style="color: #94a3b8; font-size: 12px; margin-top: 32px; border-top: 1px solid #f1f5f9; padding-top: 16px;">
+        This link will expire in 1 hour. If you did not request a password reset, please ignore this email.
+      </p>
+
+    </div>
+  `;
+}
+
+/**
+ * =====================================================
+ * LOGIN OTP EMAIL HTML
+ * =====================================================
+ */
+
+function buildLoginOtpHtml(
+  fullName,
+  otp
+) {
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 28px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
+
+      <h2 style="color: #0f172a; margin-top: 0;">
+        Your Velora sign-in code
+      </h2>
+
+      <p style="color: #475569; font-size: 16px; line-height: 1.6;">
+        Hi ${fullName}, you chose to sign in to Velora with a one-time code instead of a password.
+      </p>
+
+      <p style="color: #475569; font-size: 16px; line-height: 1.6; margin: 28px 0 12px;">
+        Your sign-in code is:
+      </p>
+
+      <div style="background-color: #2563eb; color: #ffffff; font-size: 34px; font-weight: 700; letter-spacing: 10px; text-align: center; padding: 20px 0; border-radius: 8px;">
+        ${otp}
+      </div>
+
+      <p style="color: #475569; font-size: 16px; line-height: 1.6; margin: 24px 0 0;">
+        This code expires in 10 minutes and can only be used once.
+      </p>
+
+      <p style="color: #94a3b8; font-size: 12px; margin-top: 32px; border-top: 1px solid #f1f5f9; padding-top: 16px;">
+        If you did not try to sign in to Velora, you can ignore this email. No action is needed and your password has not changed.
+      </p>
+
+    </div>
+  `;
 }
 
 /**
@@ -669,10 +791,59 @@ async function deliver({
     {
       to,
       subject,
-      transport:
-        describeConfig(),
+      transport: describeConfig(),
     }
   );
+
+  /**
+   * =================================================
+   * RESEND
+   * =================================================
+   */
+
+  if (mode === 'resend') {
+    try {
+      const result =
+        await sendViaResend({
+          to,
+          subject,
+          html,
+          text,
+        });
+
+      console.log(
+        `[Email] ${purpose} email sent successfully via Resend`,
+        {
+          to,
+          delivery: 'resend',
+          messageId:
+            result?.id || null,
+        }
+      );
+
+      return {
+        success: true,
+        delivery: 'resend',
+        previewUrl: null,
+        errorCode: null,
+        error: null,
+        missingConfig: [],
+      };
+    } catch (error) {
+      console.error(
+        `[Email] Failed to send ${purpose} email via Resend: ${error.message}`
+      );
+
+      return {
+        success: false,
+        delivery: 'resend',
+        previewUrl: null,
+        errorCode: 'RESEND_SEND_FAILED',
+        error: error.message,
+        missingConfig: [],
+      };
+    }
+  }
 
   /**
    * =================================================
@@ -682,13 +853,12 @@ async function deliver({
 
   if (mode === 'console') {
     console.warn(
-      `[Email] MAIL_MODE=console - ${purpose} email NOT sent to ${to}. ` +
-        'Nothing is delivered anywhere in this mode.'
+      `[Email] MAIL_MODE=console - ${purpose} email NOT sent to ${to}.`
     );
 
     if (link) {
       console.warn(
-        `        ${link}`
+        `Reset link: ${link}`
       );
     }
 
@@ -696,23 +866,20 @@ async function deliver({
       success: false,
       delivery: 'console',
       previewUrl: null,
-      errorCode:
-        'MAIL_CONSOLE_MODE',
-
+      errorCode: 'MAIL_CONSOLE_MODE',
       error:
-        'MAIL_MODE=console is active, so no email is delivered. Configure SMTP_HOST / SMTP_USER / SMTP_PASSWORD / SMTP_FROM for real delivery.',
-
+        'MAIL_MODE=console is active, so no email is delivered.',
       missingConfig: [],
     };
   }
 
-  let transport;
-
   /**
    * =================================================
-   * GET TRANSPORT
+   * GET SMTP TRANSPORT
    * =================================================
    */
+
+  let transport;
 
   try {
     transport =
@@ -726,15 +893,10 @@ async function deliver({
       success: false,
       delivery: mode,
       previewUrl: null,
-      errorCode:
-        'SMTP_UNAVAILABLE',
-
-      error:
-        error.message,
-
+      errorCode: 'SMTP_UNAVAILABLE',
+      error: error.message,
       missingConfig:
-        readSmtpCredentials()
-          .missing,
+        readSmtpCredentials().missing,
     };
   }
 
@@ -745,29 +907,24 @@ async function deliver({
    */
 
   if (!transport) {
-    const { missing } =
-      readSmtpCredentials();
+    const {
+      missing,
+    } = readSmtpCredentials();
 
     return {
       success: false,
       delivery: 'disabled',
       previewUrl: null,
-      errorCode:
-        'SMTP_NOT_CONFIGURED',
-
+      errorCode: 'SMTP_NOT_CONFIGURED',
       error:
-        configurationError(
-          missing
-        ),
-
-      missingConfig:
-        missing,
+        configurationError(missing),
+      missingConfig: missing,
     };
   }
 
   /**
    * =================================================
-   * SEND EMAIL
+   * SMTP SEND
    * =================================================
    */
 
@@ -791,19 +948,12 @@ async function deliver({
       {
         to,
         delivery: mode,
-
         messageId:
-          info?.messageId ||
-          null,
-
+          info?.messageId || null,
         accepted:
-          info?.accepted?.length ||
-          0,
-
+          info?.accepted?.length || 0,
         rejected:
-          info?.rejected?.length ||
-          0,
-
+          info?.rejected?.length || 0,
         previewUrl,
       }
     );
@@ -821,14 +971,10 @@ async function deliver({
       `[Email] Failed to send ${purpose} email: ${error.message}`,
       {
         to,
-
         code:
-          error?.code ||
-          null,
-
+          error?.code || null,
         command:
-          error?.command ||
-          null,
+          error?.command || null,
       }
     );
 
@@ -836,14 +982,10 @@ async function deliver({
       success: false,
       delivery: mode,
       previewUrl: null,
-
       errorCode:
         error?.code ||
         'SMTP_SEND_FAILED',
-
-      error:
-        error.message,
-
+      error: error.message,
       missingConfig: [],
     };
   }
@@ -861,9 +1003,7 @@ export async function sendVerificationEmail(
   otp
 ) {
   const recipient =
-    String(
-      toEmail || ''
-    ).trim();
+    String(toEmail || '').trim();
 
   if (!recipient) {
     console.error(
@@ -874,12 +1014,9 @@ export async function sendVerificationEmail(
       success: false,
       delivery: 'disabled',
       previewUrl: null,
-      errorCode:
-        'NO_RECIPIENT',
-
+      errorCode: 'NO_RECIPIENT',
       error:
         'A recipient email address is required',
-
       missingConfig: [],
     };
   }
@@ -919,9 +1056,7 @@ export async function sendPasswordResetEmail(
   resetToken
 ) {
   const recipient =
-    String(
-      toEmail || ''
-    ).trim();
+    String(toEmail || '').trim();
 
   const clientUrl =
     process.env.CLIENT_URL ||
@@ -929,9 +1064,7 @@ export async function sendPasswordResetEmail(
 
   const resetLink =
     `${clientUrl}/reset-password?token=` +
-    encodeURIComponent(
-      resetToken
-    );
+    encodeURIComponent(resetToken);
 
   if (!recipient) {
     console.error(
@@ -942,14 +1075,10 @@ export async function sendPasswordResetEmail(
       success: false,
       delivery: 'disabled',
       previewUrl: null,
-      errorCode:
-        'NO_RECIPIENT',
-
+      errorCode: 'NO_RECIPIENT',
       error:
         'A recipient email address is required',
-
       missingConfig: [],
-
       resetLink,
     };
   }
@@ -987,48 +1116,6 @@ export async function sendPasswordResetEmail(
 
 /**
  * =====================================================
- * SIGN-IN CODE (OTP LOGIN)
- * =====================================================
- */
-
-function buildLoginOtpHtml(
-  fullName,
-  otp
-) {
-  return `
-      <div style="font-family: 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 28px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
-
-        <h2 style="color: #0f172a; margin-top: 0;">
-          Your Velora sign-in code
-        </h2>
-
-        <p style="color: #475569; font-size: 16px; line-height: 1.6;">
-          Hi ${fullName}, you chose to sign in to Velora with a one-time code instead of a password.
-        </p>
-
-        <p style="color: #475569; font-size: 16px; line-height: 1.6; margin: 28px 0 12px;">
-          Your sign-in code is:
-        </p>
-
-        <div style="background-color: #2563eb; color: #ffffff; font-size: 34px; font-weight: 700; letter-spacing: 10px; text-align: center; padding: 20px 0; border-radius: 8px;">
-          ${otp}
-        </div>
-
-        <p style="color: #475569; font-size: 16px; line-height: 1.6; margin: 24px 0 0;">
-          This code expires in 10 minutes and can only be used once.
-        </p>
-
-        <p style="color: #94a3b8; font-size: 12px; margin-top: 32px; border-top: 1px solid #f1f5f9; padding-top: 16px;">
-          If you did not try to sign in to Velora, you can ignore this email - no action is needed
-          and your password has not changed.
-        </p>
-
-      </div>
-    `;
-}
-
-/**
- * =====================================================
  * SIGN-IN OTP EMAIL
  * =====================================================
  */
@@ -1039,9 +1126,7 @@ export async function sendLoginOtpEmail(
   otp
 ) {
   const recipient =
-    String(
-      toEmail || ''
-    ).trim();
+    String(toEmail || '').trim();
 
   if (!recipient) {
     console.error(
@@ -1052,12 +1137,9 @@ export async function sendLoginOtpEmail(
       success: false,
       delivery: 'disabled',
       previewUrl: null,
-      errorCode:
-        'NO_RECIPIENT',
-
+      errorCode: 'NO_RECIPIENT',
       error:
         'A recipient email address is required',
-
       missingConfig: [],
     };
   }
