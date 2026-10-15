@@ -26,6 +26,8 @@ import { useWishlist } from '../context/WishlistContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { ProductCard } from '../components/ProductCard';
+import { formatINR } from '../utils/currency';
+import './ProductDetailsPage.css';
 
 // =========================================================
 // IMAGE GALLERY HELPERS
@@ -632,45 +634,66 @@ export const ProductDetailsPage = () => {
 
     let mounted = true;
 
+    // The list endpoint returns { success, products, pagination }.
+    const toProductList = (data) => {
+      const list =
+        data?.products ||
+        data?.data?.products ||
+        data?.data;
+
+      return Array.isArray(list) ? list : [];
+    };
+
     const fetchRelatedProducts = async () => {
       try {
         setRelatedLoading(true);
 
-        const params = {
-          limit: 8,
-          page: 1,
-        };
+        const currentCategory =
+          product.category_name || product.category || '';
 
-        if (product.category_name) {
-          params.category = product.category_name;
-        } else if (product.category) {
-          params.category = product.category;
+        const params = { limit: 8, page: 1 };
+
+        if (currentCategory) {
+          params.category = currentCategory;
         }
 
-        const res = await api.get('/products', {
-          params,
-        });
+        const res = await api.get('/products', { params });
 
         if (!mounted) return;
 
-        if (res.data?.success) {
-          const items =
-            res.data?.products ||
-            res.data?.data?.products ||
-            res.data?.data ||
-            [];
+        // Same-category products first (the preferred source),
+        // always excluding the product currently being viewed.
+        const sameCategory = toProductList(res.data).filter(
+          (item) => String(item.id) !== String(product.id)
+        );
 
-          const filtered = items
-            .filter(
-              (item) =>
-                String(item.id) !== String(product.id)
-            )
-            .slice(0, 8);
+        let related = sameCategory;
 
-          setRelatedProducts(filtered);
-        } else {
-          setRelatedProducts([]);
+        // Categories in this catalog hold only a few products, which
+        // would leave an almost-empty row. Top up with other real
+        // products so the grid is populated; same-category items stay
+        // first so the preference is preserved.
+        if (sameCategory.length < 4) {
+          const allRes = await api.get('/products', {
+            params: { limit: 100, page: 1 },
+          });
+
+          if (!mounted) return;
+
+          const seen = new Set(
+            sameCategory.map((item) => String(item.id))
+          );
+
+          seen.add(String(product.id));
+
+          const extras = toProductList(allRes.data).filter(
+            (item) => !seen.has(String(item.id))
+          );
+
+          related = [...sameCategory, ...extras];
         }
+
+        setRelatedProducts(related.slice(0, 8));
       } catch (error) {
         console.error(
           'Failed to load related products:',
@@ -700,7 +723,7 @@ export const ProductDetailsPage = () => {
   if (loading) {
     return (
       <div
-        className="container"
+        className="site-wrapper"
         style={{
           padding: '80px 20px',
           textAlign: 'center',
@@ -724,7 +747,7 @@ export const ProductDetailsPage = () => {
   if (!product) {
     return (
       <div
-        className="container"
+        className="site-wrapper"
         style={{
           padding: '80px 20px',
           textAlign: 'center',
@@ -775,6 +798,8 @@ export const ProductDetailsPage = () => {
 
   const isOutOfStock = stock <= 0;
 
+  const isLowStock = !isOutOfStock && stock <= 5;
+
   const originalPrice = Number(product.price || 0);
 
   const discountedPrice = Number(
@@ -807,6 +832,7 @@ export const ProductDetailsPage = () => {
   const reviewCount = Number(
     product.review_count ||
       product.reviews_count ||
+      product.rating_count ||
       0
   );
 
@@ -819,6 +845,100 @@ export const ProductDetailsPage = () => {
     product.brand_name ||
     product.brand ||
     '';
+
+  const formatPrice = (value) => formatINR(value);
+
+  // =========================================================
+  // SPECIFICATIONS
+  //
+  // The catalog exposes structured columns rather than a spec
+  // blob, so the table is assembled from those columns and any
+  // optional specifications/specs/attributes payload the API
+  // may add later.
+  // =========================================================
+  const specifications = (() => {
+    const rows = [];
+
+    const add = (label, value, className) => {
+      if (value === null || value === undefined) return;
+
+      const text = String(value).trim();
+
+      if (!text) return;
+
+      rows.push({
+        label,
+        value: text,
+        className: className || '',
+      });
+    };
+
+    const raw =
+      product.specifications ||
+      product.specs ||
+      product.attributes;
+
+    const addFromObject = (source) => {
+      Object.entries(source).forEach(([key, value]) => {
+        if (value === null || value === undefined) return;
+
+        if (typeof value === 'object') return;
+
+        const label = key
+          .replace(/[_-]+/g, ' ')
+          .replace(/\b\w/g, (char) => char.toUpperCase());
+
+        add(label, value);
+      });
+    };
+
+    if (Array.isArray(raw)) {
+      raw.forEach((entry) => {
+        if (entry && typeof entry === 'object') {
+          add(
+            entry.label || entry.name || entry.key,
+            entry.value
+          );
+        } else {
+          add('Detail', entry);
+        }
+      });
+    } else if (raw && typeof raw === 'object') {
+      addFromObject(raw);
+    } else if (typeof raw === 'string' && raw.trim()) {
+      try {
+        const parsed = JSON.parse(raw);
+
+        if (parsed && typeof parsed === 'object') {
+          addFromObject(parsed);
+        } else {
+          add('Specifications', raw);
+        }
+      } catch {
+        add('Specifications', raw);
+      }
+    }
+
+    add('Brand', brandName);
+    add('Category', categoryName);
+    add(
+      'Item Code',
+      product.sku || product.item_code || product.id
+    );
+    add('Rating', rating > 0 ? `${rating.toFixed(1)} / 5` : '');
+
+    add(
+      'Availability',
+      isOutOfStock
+        ? 'Out of Stock'
+        : `In Stock (${stock} available)`,
+      isOutOfStock
+        ? 'velora-pdp-spec-outstock'
+        : 'velora-pdp-spec-instock'
+    );
+
+    return rows;
+  })();
 
   // Guard against a stale index if the image list shrinks.
   const selectedImageIndex = wrapIndex(
@@ -881,7 +1001,7 @@ export const ProductDetailsPage = () => {
     try {
       setIsAdding(true);
 
-      await addToCart(product, quantity);
+      await addToCart(productId, quantity);
 
       setJustAdded(true);
 
@@ -921,7 +1041,7 @@ export const ProductDetailsPage = () => {
     }
 
     try {
-      await addToCart(product, quantity);
+      await addToCart(productId, quantity);
 
       navigate('/checkout');
     } catch (error) {
@@ -942,7 +1062,7 @@ export const ProductDetailsPage = () => {
   // =========================================================
   const handleWishlist = async () => {
     try {
-      await toggleWishlist(product);
+      await toggleWishlist(productId);
     } catch (error) {
       console.error(
         'Wishlist action failed:',
@@ -968,325 +1088,14 @@ export const ProductDetailsPage = () => {
   };
 
   return (
-    <div
-      className="container"
-      style={{
-        paddingTop: '32px',
-        paddingBottom: '80px',
-      }}
-    >
-      {/* =====================================================
-          IMAGE GALLERY STYLES
-
-          Scoped to this page only, and kept here so the
-          gallery can collapse to a single column on mobile
-          without touching the global stylesheet.
-      ====================================================== */}
-      <style>{`
-        .velora-pdp-gallery {
-          display: grid;
-          grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-          gap: 48px;
-          align-items: start;
-        }
-
-        .velora-pdp-stage {
-          position: relative;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          min-height: 420px;
-          border-radius: 18px;
-          overflow: hidden;
-          background: var(--bg-surface, #f1f5f9);
-        }
-
-        .velora-pdp-main-btn {
-          display: block;
-          width: 100%;
-          padding: 0;
-          border: 0;
-          background: transparent;
-          cursor: zoom-in;
-        }
-
-        .velora-pdp-main-img {
-          display: block;
-          width: 100%;
-          height: 420px;
-          object-fit: contain;
-        }
-
-        .velora-pdp-stage-badge {
-          position: absolute;
-          top: 16px;
-          left: 16px;
-          z-index: 2;
-          padding: 7px 12px;
-          border-radius: 8px;
-          background: var(--primary-color);
-          color: #fff;
-          font-size: 13px;
-          font-weight: 700;
-          pointer-events: none;
-        }
-
-        .velora-pdp-stage-soldout {
-          position: absolute;
-          inset: 0;
-          z-index: 1;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: rgba(0, 0, 0, 0.45);
-          color: #fff;
-          font-size: 20px;
-          font-weight: 700;
-          pointer-events: none;
-        }
-
-        .velora-pdp-nav {
-          position: absolute;
-          top: 50%;
-          z-index: 3;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          width: 40px;
-          height: 40px;
-          border-radius: 50%;
-          border: 1px solid var(--border-color);
-          background: #fff;
-          color: var(--text-main, #0f172a);
-          box-shadow: var(--shadow-md, 0 4px 6px rgba(0, 0, 0, 0.1));
-          transform: translateY(-50%);
-          transition: all 0.15s ease;
-        }
-
-        .velora-pdp-nav:hover {
-          background: var(--primary, #2563eb);
-          border-color: var(--primary, #2563eb);
-          color: #fff;
-        }
-
-        .velora-pdp-nav-prev { left: 12px; }
-        .velora-pdp-nav-next { right: 12px; }
-
-        .velora-pdp-zoom-hint {
-          position: absolute;
-          right: 12px;
-          bottom: 12px;
-          z-index: 2;
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          padding: 6px 10px;
-          border-radius: 9999px;
-          background: rgba(255, 255, 255, 0.92);
-          color: var(--text-muted, #64748b);
-          font-size: 12px;
-          font-weight: 600;
-          pointer-events: none;
-        }
-
-        .velora-pdp-thumbs {
-          display: flex;
-          gap: 10px;
-          margin-top: 14px;
-          padding-bottom: 4px;
-          overflow-x: auto;
-        }
-
-        .velora-pdp-thumb {
-          flex: 0 0 auto;
-          width: 68px;
-          height: 68px;
-          padding: 0;
-          border: 2px solid var(--border-color);
-          border-radius: 10px;
-          background: #fff;
-          overflow: hidden;
-          cursor: pointer;
-          transition: all 0.15s ease;
-        }
-
-        .velora-pdp-thumb:hover {
-          border-color: var(--border-dark, #cbd5e1);
-        }
-
-        .velora-pdp-thumb.is-active {
-          border-color: var(--primary, #2563eb);
-          box-shadow: 0 0 0 2px var(--primary-light, #eff6ff);
-        }
-
-        .velora-pdp-thumb-img {
-          display: block;
-          width: 100%;
-          height: 100%;
-          object-fit: contain;
-        }
-
-        .velora-pdp-lightbox {
-          display: flex;
-          flex-direction: column;
-          width: 100%;
-          max-width: 820px;
-          max-height: 92vh;
-          background: #fff;
-          border: 1px solid var(--border-color);
-          border-radius: 14px;
-          box-shadow: var(--shadow-xl, 0 20px 25px rgba(0, 0, 0, 0.1));
-          overflow: hidden;
-        }
-
-        .velora-pdp-lightbox-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
-          padding: 14px 18px;
-          border-bottom: 1px solid var(--border-color);
-        }
-
-        .velora-pdp-lightbox-title {
-          color: var(--text-main, #0f172a);
-          font-size: 15px;
-          font-weight: 700;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-
-        .velora-pdp-lightbox-counter {
-          margin-top: 2px;
-          color: var(--text-muted, #64748b);
-          font-size: 12px;
-        }
-
-        .velora-pdp-lightbox-close {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          width: 36px;
-          height: 36px;
-          border: 1px solid var(--border-color);
-          border-radius: 50%;
-          background: #fff;
-          color: var(--text-muted, #64748b);
-          cursor: pointer;
-          transition: all 0.15s ease;
-        }
-
-        .velora-pdp-lightbox-close:hover {
-          background: var(--bg-surface, #f1f5f9);
-          color: var(--text-main, #0f172a);
-        }
-
-        .velora-pdp-lightbox-body {
-          position: relative;
-          display: flex;
-          flex: 1 1 auto;
-          align-items: center;
-          justify-content: center;
-          min-height: 0;
-          padding: 20px;
-          background: var(--bg-surface, #f1f5f9);
-          overflow: hidden;
-        }
-
-        .velora-pdp-lightbox-img {
-          display: block;
-          width: auto;
-          max-width: 100%;
-          max-height: 60vh;
-          object-fit: contain;
-        }
-
-        .velora-pdp-lightbox-nav {
-          position: absolute;
-          top: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          width: 40px;
-          height: 40px;
-          border: 1px solid var(--border-color);
-          border-radius: 50%;
-          background: #fff;
-          color: var(--text-main, #0f172a);
-          box-shadow: var(--shadow-md, 0 4px 6px rgba(0, 0, 0, 0.1));
-          transform: translateY(-50%);
-          cursor: pointer;
-          transition: all 0.15s ease;
-        }
-
-        .velora-pdp-lightbox-nav:hover {
-          background: var(--primary, #2563eb);
-          border-color: var(--primary, #2563eb);
-          color: #fff;
-        }
-
-        .velora-pdp-lightbox-nav-prev { left: 12px; }
-        .velora-pdp-lightbox-nav-next { right: 12px; }
-
-        .velora-pdp-lightbox-thumbs {
-          justify-content: center;
-          flex-wrap: wrap;
-          padding: 12px 16px;
-          border-top: 1px solid var(--border-color);
-          overflow-x: visible;
-        }
-
-        .velora-pdp-img-fallback {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          gap: 6px;
-          padding: 8px;
-          background: var(--bg-surface, #f1f5f9);
-          color: var(--text-muted, #64748b);
-          font-size: 12px;
-          text-align: center;
-          overflow: hidden;
-        }
-
-        @media (max-width: 900px) {
-          .velora-pdp-gallery {
-            grid-template-columns: minmax(0, 1fr);
-            gap: 28px;
-          }
-
-          .velora-pdp-stage {
-            min-height: 0;
-          }
-
-          .velora-pdp-main-img {
-            height: auto;
-            aspect-ratio: 1 / 1;
-          }
-        }
-
-        @media (max-width: 480px) {
-          .velora-pdp-nav { width: 34px; height: 34px; }
-          .velora-pdp-thumb { width: 58px; height: 58px; }
-          .velora-pdp-zoom-hint { display: none; }
-        }
-      `}</style>
-
+    <div className="velora-pdp site-wrapper">
       {/* =====================================================
           BACK BUTTON
       ====================================================== */}
       <button
         type="button"
         onClick={handleBack}
-        className="btn btn-secondary btn-sm"
-        style={{
-          marginBottom: '28px',
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '8px',
-        }}
+        className="btn btn-secondary btn-sm velora-pdp-back"
       >
         <ArrowLeft size={17} />
         Back to Products
@@ -1295,64 +1104,22 @@ export const ProductDetailsPage = () => {
       {/* =====================================================
           BREADCRUMB
       ====================================================== */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          flexWrap: 'wrap',
-          marginBottom: '28px',
-          color: 'var(--text-muted)',
-          fontSize: '14px',
-        }}
-      >
-        <Link
-          to="/"
-          style={{
-            color: 'inherit',
-            textDecoration: 'none',
-          }}
-        >
-          Home
-        </Link>
-
+      <div className="velora-pdp-breadcrumb">
+        <Link to="/">Home</Link>
         <span>/</span>
-
-        <Link
-          to="/products"
-          style={{
-            color: 'inherit',
-            textDecoration: 'none',
-          }}
-        >
-          Products
-        </Link>
-
+        <Link to="/products">Products</Link>
         <span>/</span>
-
-        <span
-          style={{
-            color: 'var(--text-color)',
-          }}
-        >
+        <span className="velora-pdp-breadcrumb-current">
           {product.name}
         </span>
       </div>
 
       {/* =====================================================
-          PRODUCT DETAILS
+          MAIN PRODUCT SECTION - IMAGE LEFT, DETAILS RIGHT
       ====================================================== */}
-      <div
-        className="card"
-        style={{
-          padding: '32px',
-          marginBottom: '56px',
-        }}
-      >
-        <div className="velora-pdp-gallery">
-          {/* =================================================
-              PRODUCT IMAGE GALLERY
-          ================================================== */}
+      <div className="velora-pdp-layout">
+        {/* ============ LEFT: IMAGE GALLERY ============ */}
+        <div className="velora-pdp-gallery-col">
           <ProductGallery
             images={galleryImages}
             activeIndex={selectedImageIndex}
@@ -1364,588 +1131,317 @@ export const ProductDetailsPage = () => {
             onNext={showNextImage}
             onOpenPreview={openImagePreview}
           />
+        </div>
 
-          {/* =================================================
-              PRODUCT INFORMATION
-          ================================================== */}
-          <div>
-            {/* Brand / Category */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                flexWrap: 'wrap',
-                marginBottom: '12px',
-              }}
-            >
-              {brandName && (
-                <span
-                  style={{
-                    fontSize: '14px',
-                    fontWeight: 700,
-                    color: 'var(--primary-color)',
-                  }}
-                >
-                  {brandName}
+        {/* ============ CENTER: PRODUCT INFO ============ */}
+        <div className="velora-pdp-info-col">
+          {/* Brand / Category */}
+          <div className="velora-pdp-brand-row">
+            {brandName && (
+              <span className="velora-pdp-brand">
+                {brandName}
+              </span>
+            )}
+
+            <span className="velora-pdp-category">
+              {categoryName}
+            </span>
+          </div>
+
+          {/* Product Name */}
+          <h1 className="velora-pdp-title">
+            {product.name}
+          </h1>
+
+          {/* Rating */}
+          <div className="velora-pdp-rating">
+            <span className="velora-pdp-rating-badge">
+              <Star size={15} fill="currentColor" />
+              {rating.toFixed(1)}
+            </span>
+
+            <span className="velora-pdp-rating-count">
+              {reviewCount}{' '}
+              {reviewCount === 1 ? 'rating' : 'ratings'}
+            </span>
+          </div>
+
+          <hr className="velora-pdp-divider" />
+
+          {/* Price */}
+          <div className="velora-pdp-price-row">
+            <span className="velora-pdp-price">
+              {formatPrice(currentPrice)}
+            </span>
+
+            {discountAmount > 0 && (
+              <>
+                <span className="velora-pdp-mrp">
+                  {formatPrice(originalPrice)}
                 </span>
-              )}
 
-              <span
-                style={{
-                  fontSize: '14px',
-                  color: 'var(--text-muted)',
-                }}
-              >
-                {categoryName}
-              </span>
+                <span className="velora-pdp-discount-tag">
+                  -{discountPercentage}%
+                </span>
+              </>
+            )}
+          </div>
+
+          {discountAmount > 0 && (
+            <div className="velora-pdp-save">
+              You save {formatPrice(discountAmount)}
             </div>
+          )}
 
-            {/* Product Name */}
-            <h1
-              style={{
-                fontSize: '32px',
-                lineHeight: 1.25,
-                margin: '0 0 16px',
-              }}
-            >
-              {product.name}
-            </h1>
+          <p className="velora-pdp-tax-note">
+            Inclusive of all taxes
+          </p>
 
-            {/* Rating */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                marginBottom: '20px',
-                flexWrap: 'wrap',
-              }}
-            >
-              <div
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '5px',
-                  padding: '6px 10px',
-                  borderRadius: '7px',
-                  background:
-                    'var(--primary-color)',
-                  color: '#fff',
-                  fontWeight: 700,
-                }}
-              >
-                <Star
-                  size={15}
-                  fill="currentColor"
-                />
-                {rating.toFixed(1)}
+          {/* VIP Membership */}
+          {membership && (
+            <div className="velora-pdp-vip">
+              <Crown
+                size={22}
+                className="velora-pdp-vip-icon"
+              />
+
+              <div>
+                <div className="velora-pdp-vip-title">
+                  VIP Membership Benefits
+                </div>
+
+                <div className="velora-pdp-vip-text">
+                  Your membership may provide
+                  additional product benefits.
+                </div>
               </div>
-
-              <span
-                style={{
-                  color: 'var(--text-muted)',
-                  fontSize: '14px',
-                }}
-              >
-                {reviewCount} reviews
-              </span>
             </div>
+          )}
 
-            {/* Price */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                flexWrap: 'wrap',
-                marginBottom: '20px',
-              }}
-            >
-              <span
-                style={{
-                  fontSize: '32px',
-                  fontWeight: 800,
-                }}
-              >
-                ₹{currentPrice.toLocaleString('en-IN')}
-              </span>
+          {/* Description */}
+          {product.description && (
+            <section className="velora-pdp-section">
+              <h3 className="velora-pdp-section-title">
+                About this item
+              </h3>
 
-              {discountAmount > 0 && (
-                <>
-                  <span
-                    style={{
-                      textDecoration: 'line-through',
-                      color: 'var(--text-muted)',
-                      fontSize: '18px',
-                    }}
-                  >
-                    ₹{originalPrice.toLocaleString(
-                      'en-IN'
-                    )}
-                  </span>
+              <p className="velora-pdp-description">
+                {product.description}
+              </p>
+            </section>
+          )}
 
-                  <span
-                    style={{
-                      fontSize: '14px',
-                      fontWeight: 700,
-                      color: 'var(--success-color, #16a34a)',
-                    }}
-                  >
-                    Save ₹
-                    {discountAmount.toLocaleString(
-                      'en-IN'
-                    )}
-                  </span>
-                </>
-              )}
-            </div>
+          {/* Specifications */}
+          {specifications.length > 0 && (
+            <section className="velora-pdp-section">
+              <h3 className="velora-pdp-section-title">
+                Specifications
+              </h3>
 
-            {/* VIP Membership */}
-            {membership && (
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                  padding: '14px 16px',
-                  borderRadius: '12px',
-                  marginBottom: '20px',
-                  border:
-                    '1px solid rgba(108, 92, 231, 0.25)',
-                  background:
-                    'rgba(108, 92, 231, 0.08)',
-                }}
-              >
-                <Crown
-                  size={20}
-                  style={{
-                    color: 'var(--primary-color)',
-                  }}
-                />
-
-                <div>
-                  <strong>
-                    VIP Membership Benefits
-                  </strong>
-
+              <div className="velora-pdp-specs">
+                {specifications.map((spec) => (
                   <div
-                    style={{
-                      fontSize: '13px',
-                      color: 'var(--text-muted)',
-                      marginTop: '3px',
-                    }}
+                    className="velora-pdp-spec-row"
+                    key={spec.label}
                   >
-                    Your membership may provide
-                    additional product benefits.
+                    <span className="velora-pdp-spec-label">
+                      {spec.label}
+                    </span>
+
+                    <span
+                      className={`velora-pdp-spec-value ${spec.className}`}
+                    >
+                      {spec.value}
+                    </span>
                   </div>
-                </div>
+                ))}
               </div>
-            )}
+            </section>
+          )}
 
-            {/* Stock */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                marginBottom: '20px',
-                fontSize: '14px',
-              }}
-            >
-              {isOutOfStock ? (
-                <>
-                  <AlertCircle
-                    size={18}
-                    style={{
-                      color:
-                        'var(--danger-color, #dc2626)',
-                    }}
-                  />
+          {/* Benefits */}
+          <div className="velora-pdp-perks">
+            <div className="velora-pdp-perk">
+              <Truck
+                size={20}
+                className="velora-pdp-perk-icon"
+              />
 
-                  <span
-                    style={{
-                      color:
-                        'var(--danger-color, #dc2626)',
-                      fontWeight: 600,
-                    }}
-                  >
-                    Out of stock
-                  </span>
-                </>
-              ) : (
-                <>
-                  <Check
-                    size={18}
-                    style={{
-                      color:
-                        'var(--success-color, #16a34a)',
-                    }}
-                  />
+              <div className="velora-pdp-perk-title">
+                Fast Delivery
+              </div>
 
-                  <span
-                    style={{
-                      color:
-                        'var(--success-color, #16a34a)',
-                      fontWeight: 600,
-                    }}
-                  >
-                    {stock} items available
-                  </span>
-                </>
-              )}
+              <div className="velora-pdp-perk-text">
+                Quick shipping
+              </div>
             </div>
 
-            {/* Description */}
-            {product.description && (
-              <div
-                style={{
-                  marginBottom: '24px',
-                }}
-              >
-                <h3
-                  style={{
-                    fontSize: '18px',
-                    marginBottom: '10px',
-                  }}
-                >
-                  Description
-                </h3>
+            <div className="velora-pdp-perk">
+              <ShieldCheck
+                size={20}
+                className="velora-pdp-perk-icon"
+              />
 
-                <p
-                  style={{
-                    color: 'var(--text-muted)',
-                    lineHeight: 1.7,
-                    margin: 0,
-                    whiteSpace: 'pre-line',
-                  }}
-                >
-                  {product.description}
-                </p>
+              <div className="velora-pdp-perk-title">
+                Secure
               </div>
-            )}
 
-            {/* Quantity */}
-            {!isOutOfStock && (
-              <div
-                style={{
-                  marginBottom: '20px',
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: '14px',
-                    fontWeight: 600,
-                    marginBottom: '9px',
-                  }}
-                >
-                  Quantity
-                </div>
-
-                <div
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    border:
-                      '1px solid var(--border-color)',
-                    borderRadius: '9px',
-                    overflow: 'hidden',
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={decreaseQuantity}
-                    disabled={quantity <= 1}
-                    style={{
-                      width: '42px',
-                      height: '42px',
-                      border: 0,
-                      background: 'transparent',
-                      cursor:
-                        quantity <= 1
-                          ? 'not-allowed'
-                          : 'pointer',
-                      opacity:
-                        quantity <= 1 ? 0.5 : 1,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <Minus size={17} />
-                  </button>
-
-                  <span
-                    style={{
-                      width: '45px',
-                      textAlign: 'center',
-                      fontWeight: 700,
-                    }}
-                  >
-                    {quantity}
-                  </span>
-
-                  <button
-                    type="button"
-                    onClick={increaseQuantity}
-                    disabled={
-                      stock > 0 &&
-                      quantity >= stock
-                    }
-                    style={{
-                      width: '42px',
-                      height: '42px',
-                      border: 0,
-                      background: 'transparent',
-                      cursor:
-                        stock > 0 &&
-                        quantity >= stock
-                          ? 'not-allowed'
-                          : 'pointer',
-                      opacity:
-                        stock > 0 &&
-                        quantity >= stock
-                          ? 0.5
-                          : 1,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <Plus size={17} />
-                  </button>
-                </div>
+              <div className="velora-pdp-perk-text">
+                Trusted purchase
               </div>
-            )}
-
-            {/* Action Buttons */}
-            <div
-              style={{
-                display: 'flex',
-                gap: '12px',
-                flexWrap: 'wrap',
-                marginBottom: '28px',
-              }}
-            >
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={handleAddToCart}
-                disabled={
-                  isOutOfStock || isAdding
-                }
-                style={{
-                  flex: '1 1 180px',
-                  minHeight: '48px',
-                }}
-              >
-                <ShoppingCart size={19} />
-
-                {isAdding
-                  ? 'Adding...'
-                  : justAdded
-                    ? 'Added to Cart'
-                    : 'Add to Cart'}
-              </button>
-
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={handleBuyNow}
-                disabled={isOutOfStock}
-                style={{
-                  flex: '1 1 140px',
-                  minHeight: '48px',
-                }}
-              >
-                Buy Now
-              </button>
-
-              <button
-                type="button"
-                onClick={handleWishlist}
-                aria-label={
-                  inWishlist
-                    ? 'Remove from wishlist'
-                    : 'Add to wishlist'
-                }
-                className="btn btn-secondary"
-                style={{
-                  width: '50px',
-                  minHeight: '48px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Heart
-                  size={20}
-                  fill={
-                    inWishlist
-                      ? 'currentColor'
-                      : 'none'
-                  }
-                />
-              </button>
             </div>
 
-            {/* Benefits */}
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns:
-                  'repeat(3, minmax(0, 1fr))',
-                gap: '12px',
-              }}
-            >
-              <div
-                style={{
-                  padding: '14px',
-                  borderRadius: '10px',
-                  background:
-                    'var(--bg-secondary, #f8f8f8)',
-                }}
-              >
-                <Truck
-                  size={20}
-                  style={{
-                    marginBottom: '8px',
-                  }}
-                />
+            <div className="velora-pdp-perk">
+              <RotateCcw
+                size={20}
+                className="velora-pdp-perk-icon"
+              />
 
-                <div
-                  style={{
-                    fontWeight: 700,
-                    fontSize: '13px',
-                  }}
-                >
-                  Fast Delivery
-                </div>
-
-                <div
-                  style={{
-                    fontSize: '12px',
-                    color: 'var(--text-muted)',
-                    marginTop: '3px',
-                  }}
-                >
-                  Quick shipping
-                </div>
+              <div className="velora-pdp-perk-title">
+                Easy Returns
               </div>
 
-              <div
-                style={{
-                  padding: '14px',
-                  borderRadius: '10px',
-                  background:
-                    'var(--bg-secondary, #f8f8f8)',
-                }}
-              >
-                <ShieldCheck
-                  size={20}
-                  style={{
-                    marginBottom: '8px',
-                  }}
-                />
-
-                <div
-                  style={{
-                    fontWeight: 700,
-                    fontSize: '13px',
-                  }}
-                >
-                  Secure
-                </div>
-
-                <div
-                  style={{
-                    fontSize: '12px',
-                    color: 'var(--text-muted)',
-                    marginTop: '3px',
-                  }}
-                >
-                  Trusted purchase
-                </div>
-              </div>
-
-              <div
-                style={{
-                  padding: '14px',
-                  borderRadius: '10px',
-                  background:
-                    'var(--bg-secondary, #f8f8f8)',
-                }}
-              >
-                <RotateCcw
-                  size={20}
-                  style={{
-                    marginBottom: '8px',
-                  }}
-                />
-
-                <div
-                  style={{
-                    fontWeight: 700,
-                    fontSize: '13px',
-                  }}
-                >
-                  Easy Returns
-                </div>
-
-                <div
-                  style={{
-                    fontSize: '12px',
-                    color: 'var(--text-muted)',
-                    marginTop: '3px',
-                  }}
-                >
-                  Hassle-free returns
-                </div>
+              <div className="velora-pdp-perk-text">
+                Hassle-free returns
               </div>
             </div>
           </div>
         </div>
+
       </div>
+
+      {/* =====================================================
+          PURCHASE ACTIONS
+          Placed on their own row directly below the main product
+          container. Add to Cart and Buy Now are the exact same
+          elements as before - same text, classes, and handlers -
+          only their container moved.
+      ====================================================== */}
+      <section className="velora-pdp-purchase">
+        <div className="velora-pdp-purchase-state">
+          <div
+            className={`velora-pdp-stock ${
+              isOutOfStock
+                ? 'is-out'
+                : isLowStock
+                  ? 'is-low'
+                  : 'is-in'
+            }`}
+          >
+            {isOutOfStock ? (
+              <>
+                <AlertCircle size={18} />
+                Out of Stock
+              </>
+            ) : (
+              <>
+                <Check size={18} />
+                {isLowStock
+                  ? `Only ${stock} left in stock`
+                  : 'In Stock'}
+              </>
+            )}
+          </div>
+
+          {!isOutOfStock && (
+            <div className="velora-pdp-qty">
+              <span className="velora-pdp-qty-label">
+                Quantity
+              </span>
+
+              <div className="velora-pdp-qty-control">
+                <button
+                  type="button"
+                  className="velora-pdp-qty-btn"
+                  onClick={decreaseQuantity}
+                  disabled={quantity <= 1}
+                  aria-label="Decrease quantity"
+                >
+                  <Minus size={17} />
+                </button>
+
+                <span className="velora-pdp-qty-value">
+                  {quantity}
+                </span>
+
+                <button
+                  type="button"
+                  className="velora-pdp-qty-btn"
+                  onClick={increaseQuantity}
+                  disabled={
+                    stock > 0 && quantity >= stock
+                  }
+                  aria-label="Increase quantity"
+                >
+                  <Plus size={17} />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="velora-pdp-actions">
+          <button
+            type="button"
+            className={`velora-pdp-add ${
+              justAdded ? 'is-added' : ''
+            }`}
+            onClick={handleAddToCart}
+            disabled={isOutOfStock || isAdding}
+          >
+            <ShoppingCart size={18} />
+
+            {isAdding
+              ? 'Adding...'
+              : justAdded
+                ? 'Added to Cart'
+                : 'Add to Cart'}
+          </button>
+
+          <button
+            type="button"
+            className="velora-pdp-buy"
+            onClick={handleBuyNow}
+            disabled={isOutOfStock}
+          >
+            Buy Now
+          </button>
+        </div>
+
+        <button
+          type="button"
+          className={`velora-pdp-wish ${
+            inWishlist ? 'is-active' : ''
+          }`}
+          onClick={handleWishlist}
+          aria-label={
+            inWishlist
+              ? 'Remove from wishlist'
+              : 'Add to wishlist'
+          }
+        >
+          <Heart
+            size={18}
+            fill={inWishlist ? 'currentColor' : 'none'}
+          />
+
+          {inWishlist
+            ? 'Added to Wishlist'
+            : 'Add to Wishlist'}
+        </button>
+      </section>
 
       {/* =====================================================
           RELATED PRODUCTS
       ====================================================== */}
-      <section
-        id="related-products-section"
-        style={{
-          marginTop: '56px',
-          paddingTop: '32px',
-          borderTop:
-            '1px solid var(--border-color)',
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '24px',
-            gap: '16px',
-            flexWrap: 'wrap',
-          }}
-        >
+      <section className="velora-pdp-related">
+        <div className="velora-pdp-related-head">
           <div>
-            <h2
-              style={{
-                fontSize: '24px',
-                marginBottom: '6px',
-              }}
-            >
+            <h2 className="velora-pdp-related-title">
               Related Products
             </h2>
 
-            <p
-              style={{
-                color: 'var(--text-muted)',
-                fontSize: '14px',
-                margin: 0,
-              }}
-            >
+            <p className="velora-pdp-related-sub">
               Similar products you may like
             </p>
           </div>
@@ -1961,28 +1457,15 @@ export const ProductDetailsPage = () => {
         </div>
 
         {relatedLoading ? (
-          <div
-            style={{
-              textAlign: 'center',
-              padding: '50px 0',
-              color: 'var(--text-muted)',
-            }}
-          >
+          <div className="velora-pdp-related-state">
             Loading related products...
           </div>
         ) : relatedProducts.length === 0 ? (
-          <div
-            className="card"
-            style={{
-              padding: '40px 20px',
-              textAlign: 'center',
-              color: 'var(--text-muted)',
-            }}
-          >
+          <div className="card velora-pdp-related-empty">
             No related products found.
           </div>
         ) : (
-          <div className="products-grid">
+          <div className="products-grid velora-pdp-related-grid">
             {relatedProducts.map(
               (relatedProduct) => (
                 <ProductCard

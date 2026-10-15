@@ -4,6 +4,7 @@ import api from '../api/client';
 import { loadRazorpayCheckout, openRazorpayCheckout } from '../api/razorpay';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { formatINR } from '../utils/currency';
 
 export const MembershipPlansPage = () => {
   const { user, membership, refreshMembership } = useAuth();
@@ -278,7 +279,7 @@ export const MembershipPlansPage = () => {
 
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px', marginBottom: '24px' }}>
                   <span style={{ fontSize: '38px', fontWeight: 800, fontFamily: 'var(--font-display)', color: 'var(--text-main)' }}>
-                    ${Number(p.price).toFixed(2)}
+                    {formatINR(p.price)}
                   </span>
                   <span style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
                     / {p.duration_hours}h access
@@ -322,7 +323,7 @@ export const MembershipPlansPage = () => {
                     'Activate Free Trial'
                   ) : (
                     <>
-                      <Zap size={18} /> Pay with Razorpay (${Number(p.price).toFixed(2)})
+                      <Zap size={18} /> Pay with Razorpay ({formatINR(p.price)})
                     </>
                   )}
                 </button>

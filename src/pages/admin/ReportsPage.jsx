@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 
 import api from '../../api/client';
+import { formatCurrency } from '../../utils/currency';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { AdminRoute } from '../../components/AdminRoute';
@@ -24,12 +25,7 @@ import {
 import { ADMIN_NAV, SUPER_ADMIN_NAV } from '../../config/portalNav';
 import { PERMISSIONS, hasPermission } from '../../utils/roles';
 
-const money = (value, currency = 'INR') =>
-  new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: currency === 'INR' ? 'INR' : currency,
-    maximumFractionDigits: 2,
-  }).format(Number(value || 0));
+const money = formatCurrency;
 
 /** Horizontal bar used for the revenue-by-day and by-category breakdowns. */
 const BarRow = ({ label, value, max, formatter = money }) => {

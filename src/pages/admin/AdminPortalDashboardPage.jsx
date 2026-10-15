@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 
 import api from '../../api/client';
+import { formatINR } from '../../utils/currency';
 import { useAuth } from '../../context/AuthContext';
 import { PortalPage } from '../../components/PortalPage';
 import {
@@ -22,12 +23,7 @@ import {
   StatusBadge,
 } from '../../components/PortalPrimitives';
 
-const money = (value) =>
-  new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-    maximumFractionDigits: 0,
-  }).format(Number(value || 0));
+const money = (value) => formatINR(value, 0);
 
 const QUICK_ACTIONS = [
   { to: '/admin/orders', label: 'Fulfil orders' },

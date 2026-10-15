@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 
 import api from '../api/client';
+import { formatINR } from '../utils/currency';
 import { SuperAdminRoute } from '../components/SuperAdminRoute';
 import { PortalLayout } from '../components/PortalLayout';
 import {
@@ -95,7 +96,7 @@ const SuperAdminDashboard = () => {
             />
             <StatCard
               label="Revenue"
-              value={`₹${Number(stats.totalRevenue || 0).toLocaleString('en-IN')}`}
+              value={formatINR(stats.totalRevenue || 0, 0)}
               icon={CreditCard}
             />
             <StatCard

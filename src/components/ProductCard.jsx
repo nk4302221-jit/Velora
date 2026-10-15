@@ -9,6 +9,7 @@ import {
 
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
+import { formatINR } from '../utils/currency';
 
 export const ProductCard = ({ product }) => {
   const navigate = useNavigate();
@@ -175,7 +176,7 @@ export const ProductCard = ({ product }) => {
         {/* Discount */}
         {discountAmount > 0 && (
           <span className="product-card-discount-badge">
-            Save ${discountAmount.toFixed(0)}
+            Save {formatINR(discountAmount)}
           </span>
         )}
 
@@ -299,12 +300,12 @@ export const ProductCard = ({ product }) => {
           {/* Price */}
           <div className="product-card-price-wrap">
             <span className="product-card-price">
-              ${displayPrice.toFixed(2)}
+              {formatINR(displayPrice)}
             </span>
 
             {discountPrice > 0 && (
               <span className="product-card-original-price">
-                ${price.toFixed(2)}
+                {formatINR(price)}
               </span>
             )}
           </div>

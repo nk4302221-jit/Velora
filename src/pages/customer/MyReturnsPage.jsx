@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { RotateCcw } from 'lucide-react';
 
 import api from '../../api/client';
+import { formatINR } from '../../utils/currency';
 import { useToast } from '../../context/ToastContext';
 import { CustomerRoute } from '../../components/CustomerRoute';
 import { PortalLayout } from '../../components/PortalLayout';
@@ -15,12 +16,7 @@ import {
 } from '../../components/PortalPrimitives';
 import { CUSTOMER_NAV } from '../../config/portalNav';
 
-const money = (value) =>
-  new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-    maximumFractionDigits: 2,
-  }).format(Number(value || 0));
+const money = formatINR;
 
 const RETURN_REASONS = [
   'Item arrived damaged',

@@ -20,6 +20,7 @@ import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { GoogleMapsPicker } from '../components/GoogleMapsPicker';
+import { formatINR } from '../utils/currency';
 
 export const CheckoutPage = () => {
   const navigate = useNavigate();
@@ -1516,12 +1517,11 @@ export const CheckoutPage = () => {
                     fontWeight: 600,
                   }}
                 >
-                  $
-                  {(
+                  {formatINR(
                     (it.discount_price ||
                       it.price) *
                     it.quantity
-                  ).toFixed(2)}
+                  )}
                 </span>
               </div>
             ))}
@@ -1532,10 +1532,7 @@ export const CheckoutPage = () => {
             <span>Subtotal</span>
 
             <span>
-              $
-              {totals.subtotal.toFixed(
-                2
-              )}
+              {formatINR(totals.subtotal)}
             </span>
           </div>
 
@@ -1552,10 +1549,7 @@ export const CheckoutPage = () => {
               </span>
 
               <span>
-                -$
-                {totals.discount.toFixed(
-                  2
-                )}
+                -{formatINR(totals.discount)}
               </span>
             </div>
           )}
@@ -1586,10 +1580,7 @@ export const CheckoutPage = () => {
                 </span>
 
                 <span>
-                  -$
-                  {totals.membershipDiscount.toFixed(
-                    2
-                  )}
+                  -{formatINR(totals.membershipDiscount)}
                 </span>
               </div>
             )}
@@ -1601,9 +1592,7 @@ export const CheckoutPage = () => {
             <span>
               {totals.shipping === 0
                 ? 'FREE'
-                : `$${totals.shipping.toFixed(
-                    2
-                  )}`}
+                : formatINR(totals.shipping)}
             </span>
           </div>
 
@@ -1617,10 +1606,7 @@ export const CheckoutPage = () => {
                   'var(--primary)',
               }}
             >
-              $
-              {totals.total.toFixed(
-                2
-              )}
+              {formatINR(totals.total)}
             </span>
           </div>
 
@@ -1649,16 +1635,14 @@ export const CheckoutPage = () => {
               <>
                 <Lock size={18} />
 
-                Pay with Razorpay ($
-                {totals.total.toFixed(2)})
+                Pay with Razorpay ({formatINR(totals.total)})
               </>
             ) : paymentMethod ===
               'stripe' ? (
               <>
                 <Lock size={18} />
 
-                Pay with Stripe ($
-                {totals.total.toFixed(2)})
+                Pay with Stripe ({formatINR(totals.total)})
               </>
             ) : (
               'Confirm Order (Cash on Delivery)'

@@ -1910,29 +1910,49 @@ h6 {
   padding: 24px;
 }
 
-/* Shipment tracker: 5 equal columns joined by a horizontal rule. */
+/* Shipment tracker: evenly spaced steps joined by a two-tone rule.
+   The grey track and the green progress overlay are inset by half a step so
+   the line begins on the first icon and ends on the last, never overflowing
+   the container. --progress-ratio (0..1) is supplied by the component from the
+   persisted order status. */
 .order-timeline {
   display: flex;
 
   justify-content: space-between;
 
   position: relative;
+
+  width: 100%;
 }
 
-.order-timeline-connector {
+.order-timeline-track,
+.order-timeline-progress {
   position: absolute;
 
   top: 20px;
 
-  left: 5%;
-
-  right: 5%;
+  left: var(--half-step, 10%);
 
   height: 3px;
 
-  background: var(--border-color);
+  border-radius: var(--radius-full);
 
   z-index: 1;
+}
+
+.order-timeline-track {
+  right: var(--half-step, 10%);
+
+  background: #d1d5db;
+}
+
+.order-timeline-progress {
+  width: calc(
+    (100% - var(--half-step, 10%) - var(--half-step, 10%)) *
+      var(--progress-ratio, 0)
+  );
+
+  background: #16a34a;
 }
 
 .order-timeline-step {
@@ -1944,7 +1964,9 @@ h6 {
 
   z-index: 2;
 
-  width: var(--step-share);
+  width: var(--step-share, 20%);
+
+  min-width: 0;
 
   text-align: center;
 }
@@ -1952,13 +1974,89 @@ h6 {
 .order-timeline-dot {
   flex-shrink: 0;
 
+  width: 42px;
+
+  height: 42px;
+
+  border-radius: 50%;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: center;
+
   margin-bottom: 10px;
+
+  background: #e2e8f0;
+
+  color: #64748b;
+
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+.order-timeline-dot.is-completed {
+  background: #16a34a;
+
+  color: #ffffff;
+}
+
+.order-timeline-dot.is-active {
+  background: var(--primary);
+
+  color: #ffffff;
+
+  box-shadow: 0 0 0 4px var(--primary-light);
 }
 
 .order-timeline-label {
   min-width: 0;
 
   overflow-wrap: anywhere;
+}
+
+.order-timeline-label-title {
+  font-weight: 700;
+
+  font-size: 13px;
+
+  color: var(--text-light);
+}
+
+.order-timeline-step.is-completed .order-timeline-label-title,
+.order-timeline-step.is-active .order-timeline-label-title {
+  color: var(--text-main);
+}
+
+.order-timeline-label-state {
+  font-size: 11px;
+
+  color: var(--text-muted);
+
+  margin-top: 2px;
+
+  text-transform: capitalize;
+}
+
+.order-timeline-heading {
+  font-size: 16px;
+
+  margin-bottom: 24px;
+}
+
+.order-timeline-heading.has-note {
+  margin-bottom: 8px;
+}
+
+.order-timeline-cancelled-note {
+  font-size: 13px;
+
+  color: var(--danger);
+
+  margin: 0 0 18px;
 }
 
 
@@ -2358,6 +2456,12 @@ h6 {
 
 .footer-links a:hover {
   color: #ffffff;
+}
+
+.footer-links a.footer-link-active {
+  color: #60a5fa;
+
+  font-weight: 600;
 }
 
 .footer-bottom {
@@ -3031,7 +3135,8 @@ h6 {
 
   /* Five 42px circles plus their labels do not fit side by side on a phone,
      so the tracker becomes a vertical rail: a left-hand line with each step
-     stacked as icon-beside-label. */
+     stacked as icon-beside-label. The same inset rule keeps the rail aligned
+     on the icon centres with no horizontal overflow. */
   .order-timeline {
     flex-direction: column;
 
@@ -3040,7 +3145,8 @@ h6 {
     gap: 4px;
   }
 
-  .order-timeline-connector {
+  .order-timeline-track,
+  .order-timeline-progress {
     top: 20px;
 
     bottom: 20px;
@@ -3052,6 +3158,12 @@ h6 {
     width: 3px;
 
     height: auto;
+  }
+
+  .order-timeline-progress {
+    bottom: auto;
+
+    height: calc((100% - 40px) * var(--progress-ratio, 0));
   }
 
   .order-timeline-step {

@@ -22,6 +22,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   ...rootConfig,
 
+  // Point Vite at the project root so `npm run build` from this folder
+  // resolves the SAME `index.html` and `src/` the root config uses.
+  // Without this, Vite looks for `frontend/index.html`, which does not
+  // exist, and the build fails with UNRESOLVED_ENTRY.
+  root: path.resolve(__dirname, '..'),
+
   build: {
     outDir: path.resolve(__dirname, 'dist'),
     emptyOutDir: true,

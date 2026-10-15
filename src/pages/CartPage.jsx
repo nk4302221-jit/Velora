@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Trash2, ShoppingBag, ArrowRight, ShieldCheck, Crown } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
+import { formatINR } from '../utils/currency';
 
 export const CartPage = () => {
   const { items, totals, updateQuantity, removeFromCart, clearCart, loading } = useCart();
@@ -95,10 +96,10 @@ export const CartPage = () => {
                     {item.name}
                   </Link>
                   <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                    ${unitPrice.toFixed(2)} each
+                    {formatINR(unitPrice)} each
                     {item.discount_price && (
                       <span style={{ textDecoration: 'line-through', marginLeft: '6px', color: 'var(--text-light)', fontSize: '12px' }}>
-                        ${Number(item.price).toFixed(2)}
+                        {formatINR(item.price)}
                       </span>
                     )}
                   </div>
@@ -134,7 +135,7 @@ export const CartPage = () => {
 
                 {/* Line Total */}
                 <div className="cart-item-total" style={{ fontWeight: 700, fontSize: '16px', minWidth: '80px', textAlign: 'right' }}>
-                  ${lineTotal.toFixed(2)}
+                  {formatINR(lineTotal)}
                 </div>
 
                 {/* Delete Button */}
@@ -161,13 +162,13 @@ export const CartPage = () => {
 
           <div className="summary-row">
             <span>Subtotal</span>
-            <span>${totals.subtotal.toFixed(2)}</span>
+            <span>{formatINR(totals.subtotal)}</span>
           </div>
 
           {totals.discount > 0 && (
             <div className="summary-row" style={{ color: 'var(--success)' }}>
               <span>Promotional Savings</span>
-              <span>-${totals.discount.toFixed(2)}</span>
+              <span>-{formatINR(totals.discount)}</span>
             </div>
           )}
 
@@ -176,18 +177,18 @@ export const CartPage = () => {
               <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                 <Crown size={14} /> VIP Pass Discount
               </span>
-              <span>-${totals.membershipDiscount.toFixed(2)}</span>
+              <span>-{formatINR(totals.membershipDiscount)}</span>
             </div>
           )}
 
           <div className="summary-row">
             <span>Shipping</span>
-            <span>{totals.shipping === 0 ? 'FREE' : `$${totals.shipping.toFixed(2)}`}</span>
+            <span>{totals.shipping === 0 ? 'FREE' : formatINR(totals.shipping)}</span>
           </div>
 
           <div className="summary-row total">
             <span>Estimated Total</span>
-            <span style={{ color: 'var(--primary)' }}>${totals.total.toFixed(2)}</span>
+            <span style={{ color: 'var(--primary)' }}>{formatINR(totals.total)}</span>
           </div>
 
           <button

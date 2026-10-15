@@ -56,7 +56,6 @@ const ProfilePage = lazyNamed(() => import('./pages/ProfilePage'), 'ProfilePage'
 
 // --- Auth ---
 const LoginPage = lazyNamed(() => import('./pages/LoginPage'), 'LoginPage');
-const OtpPinLoginPage = lazyNamed(() => import('./pages/OtpPinLoginPage'), 'OtpPinLoginPage');
 const RegisterPage = lazyNamed(() => import('./pages/RegisterPage'), 'RegisterPage');
 const VerifyEmailPage = lazyNamed(() => import('./pages/VerifyEmailPage'), 'VerifyEmailPage');
 const ForgotPasswordPage = lazyNamed(() => import('./pages/ForgotPasswordPage'), 'ForgotPasswordPage');
@@ -267,17 +266,6 @@ const AppRoutes = () => (
         </SiteLayout>
       }
     />
-    {/* Optional OTP / PIN sign-in. A separate page, so LoginPage and its
-        password form are completely untouched. */}
-    <Route
-      path="/login-otp"
-      element={
-        <SiteLayout>
-          <OtpPinLoginPage />
-        </SiteLayout>
-      }
-    />
-
     {/* ============ Customer storefront (shopper, not portal) ============ */}
     <Route
       path="/checkout"

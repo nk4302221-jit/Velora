@@ -15,6 +15,7 @@ import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { isAdminRole } from '../utils/roles';
+import { formatINR } from '../utils/currency';
 
 // Mirrors validOrderStatuses in adminController.updateOrderStatus().
 const ORDER_STATUSES = [
@@ -33,7 +34,10 @@ export const OrderDetailsPage = () => {
   const { showToast } = useToast();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [updating, setUpdating] = useState(false);
+  // Which status button is mid-flight, so only that one shows a busy label
+  // while every button stays disabled until the request settles.
+  const [updatingStatus, setUpdatingStatus] = useState(null);
+  const updating = updatingStatus !== null;
 
   const canManageOrder = isAdminRole(role);
 
@@ -57,21 +61,32 @@ export const OrderDetailsPage = () => {
   // Staff-only fulfilment action. Reuses the audited admin endpoint so the
   // existing audit logging keeps recording who changed the status.
   const updateOrderStatus = async (nextStatus) => {
-    if (!order || nextStatus === order.order_status) return;
+    if (!order || updating || nextStatus === order.order_status) return;
 
-    setUpdating(true);
+    setUpdatingStatus(nextStatus);
 
     try {
       const res = await api.patch(`/admin/orders/${order.id}/status`, {
         orderStatus: nextStatus,
       });
 
+      // Success is only reported when the API explicitly confirms it. A
+      // non-2xx response throws before reaching here, and a falsy success flag
+      // is surfaced as an error instead of a false confirmation.
+      if (res.data?.success !== true) {
+        throw new Error(res.data?.message || 'Could not update the order');
+      }
+
       const updated = res.data?.data?.order;
 
-      // Reflect the new status immediately, without a full reload.
-      setOrder((previous) =>
-        previous ? { ...previous, ...(updated || { order_status: nextStatus }) } : previous
-      );
+      // The backend returns the persisted row; without it there is nothing
+      // safe to show, so treat it as a failure rather than a phantom update.
+      if (!updated) {
+        throw new Error('The order could not be updated. Please try again.');
+      }
+
+      // Reflect the persisted status immediately, without a full reload.
+      setOrder((previous) => (previous ? { ...previous, ...updated } : previous));
 
       showToast(
         res.data?.message || `Order marked ${nextStatus}`,
@@ -79,11 +94,11 @@ export const OrderDetailsPage = () => {
       );
     } catch (err) {
       showToast(
-        err.response?.data?.message || 'Could not update the order',
+        err.response?.data?.message || err.message || 'Could not update the order',
         'error'
       );
     } finally {
-      setUpdating(false);
+      setUpdatingStatus(null);
     }
   };
 
@@ -110,7 +125,8 @@ export const OrderDetailsPage = () => {
     );
   }
 
-  // Tracking steps
+  // Tracking steps. Each statusKey mirrors the order_status enum persisted by
+  // the backend, so progress is derived purely from the stored status.
   const steps = [
     { title: 'Order Placed', statusKey: 'pending', icon: Clock },
     { title: 'Payment Confirmed', statusKey: 'confirmed', icon: CheckCircle2 },
@@ -119,19 +135,34 @@ export const OrderDetailsPage = () => {
     { title: 'Delivered', statusKey: 'delivered', icon: Package },
   ];
 
+  const totalSteps = steps.length;
+
+  const statusOrder = {
+    pending: 0,
+    confirmed: 1,
+    processing: 2,
+    shipped: 3,
+    delivered: 4,
+  };
+
+  // A cancelled order has no fulfilment progress to show: it must never mark
+  // any shipping step as complete.
+  const isCancelled = order.order_status === 'cancelled';
+
+  const currentLevel = isCancelled
+    ? -1
+    : (statusOrder[order.order_status] ?? 0);
+
+  // Fraction (0..1) of the connector drawn in green. Pending => 0 (no progress
+  // past the first step), Confirmed => 0.25, ... Delivered => 1 (full line).
+  const progressRatio =
+    isCancelled || totalSteps <= 1
+      ? 0
+      : Math.max(0, Math.min(totalSteps - 1, currentLevel)) /
+        (totalSteps - 1);
+
   const getStepState = (stepIndex) => {
-    const statusOrder = {
-      pending: 0,
-      confirmed: 1,
-      processing: 2,
-      shipped: 3,
-      delivered: 4,
-    };
-    // A cancelled order has no fulfilment progress to show.
-    const currentLevel =
-      order.order_status === 'cancelled'
-        ? -1
-        : (statusOrder[order.order_status] ?? 0);
+    if (isCancelled) return 'upcoming';
     if (stepIndex < currentLevel) return 'completed';
     if (stepIndex === currentLevel) return 'active';
     return 'upcoming';
@@ -168,72 +199,70 @@ export const OrderDetailsPage = () => {
           </p>
 
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            {ORDER_STATUSES.map((value) => (
-              <button
-                key={value}
-                type="button"
-                className={`btn btn-sm ${
-                  value === order.order_status
-                    ? 'btn-primary'
-                    : 'btn-secondary'
-                }`}
-                disabled={updating || value === order.order_status}
-                onClick={() => updateOrderStatus(value)}
-                aria-label={`Set order ${order.order_number || order.id} to ${value}`}
-              >
-                {value.charAt(0).toUpperCase() + value.slice(1)}
-              </button>
-            ))}
+            {ORDER_STATUSES.map((value) => {
+              const isCurrent = value === order.order_status;
+              const isBusy = updatingStatus === value;
+
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  className={`btn btn-sm ${
+                    isCurrent ? 'btn-primary' : 'btn-secondary'
+                  }`}
+                  disabled={updating || isCurrent}
+                  aria-busy={isBusy}
+                  onClick={() => updateOrderStatus(value)}
+                  aria-label={`Set order ${order.order_number || order.id} to ${value}`}
+                >
+                  {isBusy
+                    ? 'Updating…'
+                    : value.charAt(0).toUpperCase() + value.slice(1)}
+                </button>
+              );
+            })}
           </div>
         </div>
       ) : null}
 
       {/* Shipment Visual Progress Tracker */}
       <div className="card" style={{ padding: '32px 24px', marginBottom: '32px' }} id="shipment-progress-tracker">
-        <h3 style={{ fontSize: '16px', marginBottom: '24px' }}>Shipment Tracking Timeline</h3>
-        {order.order_status === 'cancelled' && (
-          <p style={{ fontSize: '13px', color: 'var(--danger)', marginTop: '-14px', marginBottom: '18px' }}>
+        <h3 className={`order-timeline-heading${isCancelled ? ' has-note' : ''}`}>
+          Shipment Tracking Timeline
+        </h3>
+        {isCancelled && (
+          <p className="order-timeline-cancelled-note">
             This order was cancelled and is no longer in transit.
           </p>
         )}
-        <div className="order-timeline">
-          {/* Connector Line */}
-          <div className="order-timeline-connector" />
+        <div
+          className="order-timeline"
+          style={{
+            '--step-share': `${100 / totalSteps}%`,
+            '--half-step': `${50 / totalSteps}%`,
+            '--progress-ratio': String(progressRatio),
+          }}
+        >
+          {/* Grey base rule plus a green overlay, both inset by half a step so
+              the line starts and ends on the first/last step icons. */}
+          <div className="order-timeline-track" aria-hidden="true" />
+          <div className="order-timeline-progress" aria-hidden="true" />
 
           {steps.map((st, idx) => {
             const state = getStepState(idx);
             const Icon = st.icon;
-            const isDone = state === 'completed' || state === 'active';
 
             return (
               <div
-                key={idx}
-                className="order-timeline-step"
-                style={{ '--step-share': `${100 / steps.length}%` }}
+                key={st.statusKey}
+                className={`order-timeline-step is-${state}`}
               >
-                <div
-                  className="order-timeline-dot"
-                  style={{
-                    width: '42px',
-                    height: '42px',
-                    borderRadius: '50%',
-                    background: state === 'active' ? 'var(--primary)' : isDone ? 'var(--success)' : '#e2e8f0',
-                    color: isDone ? '#ffffff' : '#64748b',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    boxShadow: state === 'active' ? '0 0 0 4px var(--primary-light)' : 'none',
-                  }}
-                >
+                <div className={`order-timeline-dot is-${state}`}>
                   <Icon size={20} />
                 </div>
                 <div className="order-timeline-label">
-                  <div style={{ fontWeight: 700, fontSize: '13px', color: isDone ? 'var(--text-main)' : 'var(--text-light)' }}>
-                    {st.title}
-                  </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px', textTransform: 'capitalize' }}>
-                    {state}
-                  </div>
+                  <div className="order-timeline-label-title">{st.title}</div>
+                  <div className="order-timeline-label-state">{state}</div>
                 </div>
               </div>
             );
@@ -261,12 +290,12 @@ export const OrderDetailsPage = () => {
                   <div>
                     <div style={{ fontWeight: 600, fontSize: '15px' }}>{item.product_name}</div>
                     <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                      Quantity: {item.quantity} × ${Number(item.price).toFixed(2)}
+                      Quantity: {item.quantity} × {formatINR(item.price)}
                     </div>
                   </div>
                 </div>
                 <div style={{ fontWeight: 700, fontSize: '15px' }}>
-                  ${(Number(item.price) * item.quantity).toFixed(2)}
+                  {formatINR(Number(item.price) * item.quantity)}
                 </div>
               </div>
             ))}
@@ -310,21 +339,21 @@ export const OrderDetailsPage = () => {
             </div>
             <div className="summary-row">
               <span>Subtotal</span>
-              <span>${Number(order.subtotal).toFixed(2)}</span>
+              <span>{formatINR(order.subtotal)}</span>
             </div>
             {Number(order.discount) > 0 && (
               <div className="summary-row" style={{ color: 'var(--success)' }}>
                 <span>Discount / VIP Savings</span>
-                <span>-${Number(order.discount).toFixed(2)}</span>
+                <span>-{formatINR(order.discount)}</span>
               </div>
             )}
             <div className="summary-row">
               <span>Shipping</span>
-              <span>{Number(order.shipping) === 0 ? 'FREE' : `$${Number(order.shipping).toFixed(2)}`}</span>
+              <span>{Number(order.shipping) === 0 ? 'FREE' : formatINR(order.shipping)}</span>
             </div>
             <div className="summary-row total">
               <span>Total Paid</span>
-              <span style={{ color: 'var(--primary)' }}>${Number(order.total_amount).toFixed(2)}</span>
+              <span style={{ color: 'var(--primary)' }}>{formatINR(order.total_amount)}</span>
             </div>
           </div>
         </div>

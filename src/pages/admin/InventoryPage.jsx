@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Package, Save, Search, AlertTriangle, XCircle } from 'lucide-react';
 
 import api from '../../api/client';
+import { formatINR } from '../../utils/currency';
 import { useToast } from '../../context/ToastContext';
 import { PortalPage } from '../../components/PortalPage';
 import {
@@ -13,12 +14,7 @@ import {
   StatusBadge,
 } from '../../components/PortalPrimitives';
 
-const money = (value) =>
-  new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-    maximumFractionDigits: 2,
-  }).format(Number(value || 0));
+const money = formatINR;
 
 const Inventory = () => {
   const { showToast } = useToast();

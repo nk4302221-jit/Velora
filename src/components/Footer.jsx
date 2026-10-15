@@ -1,9 +1,36 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { ShoppingBag, ShieldCheck, Truck, RotateCcw, CreditCard } from 'lucide-react';
 import { BrandLogo } from './BrandLogo';
 
 export const Footer = () => {
+  const { pathname, search } = useLocation();
+
+  const isProductsIndex = pathname === '/products';
+  const isProductsDetails = pathname.startsWith('/products/');
+  const category = isProductsIndex ? new URLSearchParams(search).get('category') : null;
+
+  const activeClass = (active) => (active ? 'footer-link-active' : undefined);
+  const current = (active) => (active ? 'page' : undefined);
+
+  const shopActive = {
+    all: isProductsDetails || (isProductsIndex && !category),
+    electronics: isProductsIndex && category === 'Electronics',
+    audio: isProductsIndex && category === 'Audio',
+    wearables: isProductsIndex && category === 'Wearables',
+    plans: pathname === '/plans',
+  };
+
+  const accountActive = {
+    profile: pathname === '/profile',
+    orders: pathname === '/orders' || pathname.startsWith('/orders/'),
+    wishlist: pathname === '/wishlist',
+    cart: pathname === '/cart',
+    addresses: pathname === '/profile/addresses',
+  };
+
+  const adminActive = pathname === '/admin' || pathname.startsWith('/admin/');
+
   return (
     <footer className="footer" id="site-footer">
       <div className="site-wrapper">
@@ -24,7 +51,7 @@ export const Footer = () => {
             </div>
             <div>
               <div style={{ color: '#fff', fontWeight: 700, fontSize: '15px' }}>Free Express Shipping</div>
-              <div style={{ fontSize: '13px', color: '#94a3b8' }}>On orders over $100 & VIP members</div>
+              <div style={{ fontSize: '13px', color: '#94a3b8' }}>On orders over ₹100 & VIP members</div>
             </div>
           </div>
 
@@ -73,22 +100,22 @@ export const Footer = () => {
           <div>
             <h4 className="footer-col-title">Shop & Browse</h4>
             <ul className="footer-links">
-              <li><Link to="/products">All Products</Link></li>
-              <li><Link to="/products?category=Electronics">Electronics & Tech</Link></li>
-              <li><Link to="/products?category=Audio">High-Fidelity Audio</Link></li>
-              <li><Link to="/products?category=Wearables">Smart Wearables</Link></li>
-              <li><Link to="/plans">Membership Passes</Link></li>
+              <li><Link to="/products" className={activeClass(shopActive.all)} aria-current={current(shopActive.all)}>All Products</Link></li>
+              <li><Link to="/products?category=Electronics" className={activeClass(shopActive.electronics)} aria-current={current(shopActive.electronics)}>Electronics & Tech</Link></li>
+              <li><Link to="/products?category=Audio" className={activeClass(shopActive.audio)} aria-current={current(shopActive.audio)}>High-Fidelity Audio</Link></li>
+              <li><Link to="/products?category=Wearables" className={activeClass(shopActive.wearables)} aria-current={current(shopActive.wearables)}>Smart Wearables</Link></li>
+              <li><Link to="/plans" className={activeClass(shopActive.plans)} aria-current={current(shopActive.plans)}>Membership Passes</Link></li>
             </ul>
           </div>
 
           <div>
             <h4 className="footer-col-title">Account & Orders</h4>
             <ul className="footer-links">
-              <li><Link to="/profile">My Profile</Link></li>
-              <li><Link to="/orders">Order Tracking</Link></li>
-              <li><Link to="/wishlist">Saved Wishlist</Link></li>
-              <li><Link to="/cart">Shopping Cart</Link></li>
-              <li><Link to="/profile/addresses">Delivery Addresses</Link></li>
+              <li><Link to="/profile" className={activeClass(accountActive.profile)} aria-current={current(accountActive.profile)}>My Profile</Link></li>
+              <li><Link to="/orders" className={activeClass(accountActive.orders)} aria-current={current(accountActive.orders)}>Order Tracking</Link></li>
+              <li><Link to="/wishlist" className={activeClass(accountActive.wishlist)} aria-current={current(accountActive.wishlist)}>Saved Wishlist</Link></li>
+              <li><Link to="/cart" className={activeClass(accountActive.cart)} aria-current={current(accountActive.cart)}>Shopping Cart</Link></li>
+              <li><Link to="/profile/addresses" className={activeClass(accountActive.addresses)} aria-current={current(accountActive.addresses)}>Delivery Addresses</Link></li>
             </ul>
           </div>
 
@@ -99,7 +126,7 @@ export const Footer = () => {
               <li><span style={{ color: '#cbd5e1' }}>JWT Auth with Bcrypt Hashing</span></li>
               <li><span style={{ color: '#cbd5e1' }}>Storj Decentralized Cloud Storage</span></li>
               <li><span style={{ color: '#cbd5e1' }}>Node-Cron Auto Expiry Jobs</span></li>
-              <li><Link to="/admin" style={{ color: '#60a5fa' }}>Admin Portal Login</Link></li>
+              <li><Link to="/admin" className={activeClass(adminActive)} aria-current={current(adminActive)}>Admin Portal Login</Link></li>
             </ul>
           </div>
         </div>

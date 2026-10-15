@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Wallet } from 'lucide-react';
 
 import api from '../../api/client';
+import { formatCurrency } from '../../utils/currency';
 import { CustomerRoute } from '../../components/CustomerRoute';
 import { PortalLayout } from '../../components/PortalLayout';
 import {
@@ -15,12 +16,7 @@ import {
 } from '../../components/PortalPrimitives';
 import { CUSTOMER_NAV } from '../../config/portalNav';
 
-const money = (value, currency = 'INR') =>
-  new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: currency === 'INR' ? 'INR' : currency,
-    maximumFractionDigits: 2,
-  }).format(Number(value || 0));
+const money = formatCurrency;
 
 const PaymentHistory = () => {
   const [payments, setPayments] = useState([]);

@@ -883,12 +883,60 @@ if (!claimed) {
   process.exit(1);
 }
 
+// ------------------------------------------------------- backend watcher
+//
+// `node --watch` watches the entry point AND every module it imports, so an
+// edit inside a dependency in node_modules (depd, long, combined-stream,
+// mysql2, ...) restarts the backend even though no application source changed.
+// The running app also writes runtime output (the SQLite database in `data/`,
+// uploaded files, logs) that must never be mistaken for source. `--watch-path`
+// scopes watch mode to an explicit set of paths instead of the whole module
+// graph, so every name below is ignored.
+const BACKEND_UNWATCHED = new Set([
+  'node_modules',
+  '.git',
+  'dist',
+  'build',
+  'coverage',
+  '.nyc_output',
+  'logs',
+  'log',
+  'data',
+  'uploads',
+]);
+
+// `--watch-path` is only implemented on Windows and macOS; elsewhere Node
+// throws ERR_FEATURE_UNAVAILABLE_ON_PLATFORM. Degrade to the default watch set
+// rather than fail to boot on such a platform.
+const WATCH_PATH_SUPPORTED = IS_WIN || process.platform === 'darwin';
+
+// Application source the backend watcher may observe: the root entry script
+// plus every non-generated entry directly under backend/. Sub-directories are
+// watched recursively, so their own files (and any new ones) are covered while
+// the ignored names above stay out of the watch set.
+function backendWatchArgs() {
+  if (!WATCH_PATH_SUPPORTED) return ['--watch', 'server.js'];
+
+  const paths = ['server.js'];
+  try {
+    const backendDir = path.join(root, 'backend');
+    for (const entry of fs.readdirSync(backendDir, { withFileTypes: true })) {
+      if (BACKEND_UNWATCHED.has(entry.name) || entry.name.startsWith('.')) continue;
+      paths.push(path.join('backend', entry.name));
+    }
+  } catch {
+    /* backend/ is missing: the entry point alone is still watched */
+  }
+  // --watch-path implies --watch, and the entry script must come last.
+  return [...paths.map((p) => `--watch-path=${p}`), 'server.js'];
+}
+
 log(`[dev] Starting Velora frontend (Vite) at http://localhost:${FRONTEND_PORT}`);
 log(`[dev] Starting Velora backend (Express) at http://localhost:${BACKEND_PORT}`);
 
 const backend = run(
   'backend',
-  ['--watch', 'server.js'],
+  backendWatchArgs(),
   // 5000 is a fixed contract: vite.config.js proxies /api here. Pinning it in
   // the child environment keeps a stray PORT= in the shell from moving it.
   { ...process.env, PORT: String(BACKEND_PORT) },

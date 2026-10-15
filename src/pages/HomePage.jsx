@@ -242,7 +242,7 @@ export const HomePage = () => {
               Save Up to 12% on Every Order + Free Shipping
             </h2>
             <p style={{ color: '#e0f2fe', fontSize: '15px', maxWidth: '600px' }}>
-              Activate a 1-hour Free Trial, 6-hour Silver Pass ($9.99), or 12-hour Gold VIP Pass ($19.99).
+              Activate a 1-hour Free Trial, 6-hour Silver Pass (₹9.99), or 12-hour Gold VIP Pass (₹19.99).
               Discounts are automatically deducted at checkout with automated time tracking!
             </p>
           </div>

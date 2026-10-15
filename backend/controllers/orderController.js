@@ -122,7 +122,7 @@ export async function confirmOrderPayment(req, res) {
         id,
         userId,
         order.total_amount,
-        'USD',
+        order.currency || 'INR',
         isCod ? 'cod' : 'stripe',
         transactionId,
         isCod ? 'pending' : 'succeeded',

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Package, ChevronRight, Clock, CheckCircle2, Truck, AlertCircle } from 'lucide-react';
 import api from '../api/client';
+import { formatINR } from '../utils/currency';
 
 export const OrdersPage = () => {
   const [orders, setOrders] = useState([]);
@@ -112,7 +113,7 @@ export const OrdersPage = () => {
                 <div style={{ textAlign: 'right' }}>
                   <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Total Amount</div>
                   <div style={{ fontWeight: 800, fontSize: '18px', color: 'var(--primary)' }}>
-                    ${Number(ord.total_amount).toFixed(2)}
+                    {formatINR(ord.total_amount)}
                   </div>
                   <div style={{ fontSize: '11px', color: ord.payment_status === 'paid' ? 'var(--success)' : 'var(--text-light)', fontWeight: 600 }}>
                     {ord.payment_status === 'paid' ? 'Paid via ' + ord.payment_method : 'Payment Pending'}

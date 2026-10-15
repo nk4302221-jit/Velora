@@ -24,6 +24,7 @@ import {
   isSuperAdminRole,
   roleLabel,
 } from '../utils/roles';
+import { formatINR } from '../utils/currency';
 
 export const AdminDashboardPage = () => {
   const { showToast } = useToast();
@@ -913,10 +914,7 @@ export const AdminDashboardPage = () => {
                   marginTop: '10px',
                 }}
               >
-                $
-                {Number(
-                  stats.totalRevenue || 0
-                ).toFixed(2)}
+                {formatINR(stats.totalRevenue || 0)}
               </div>
 
               <div
@@ -1110,10 +1108,7 @@ export const AdminDashboardPage = () => {
                           fontWeight: 700,
                         }}
                       >
-                        $
-                        {Number(
-                          order.total_amount || 0
-                        ).toFixed(2)}
+                        {formatINR(order.total_amount || 0)}
                       </td>
 
                       <td style={{ padding: '12px 10px' }}>
@@ -1660,12 +1655,11 @@ export const AdminDashboardPage = () => {
                           fontWeight: 700,
                         }}
                       >
-                        $
-                        {Number(
+                        {formatINR(
                           product.discount_price ||
                             product.price ||
                             0
-                        ).toFixed(2)}
+                        )}
                       </td>
 
                       <td
@@ -1864,10 +1858,7 @@ export const AdminDashboardPage = () => {
                         fontWeight: 800,
                       }}
                     >
-                      $
-                      {Number(
-                        order.total_amount || 0
-                      ).toFixed(2)}
+                      {formatINR(order.total_amount || 0)}
                     </td>
 
                     <td

@@ -1249,6 +1249,16 @@ export async function updateOrderStatus(
         )
       )[0];
 
+    // Fail loudly when the order does not exist. Without this the UPDATE below
+    // would affect zero rows yet the endpoint would still report success.
+    if (!before) {
+      return errorResponse(
+        res,
+        'Order not found',
+        404
+      );
+    }
+
     await executeQuery(
       `UPDATE orders
        SET
@@ -1275,6 +1285,28 @@ export async function updateOrderStatus(
       ]
     );
 
+    const updated =
+      (
+        await executeQuery(
+          `SELECT *
+           FROM orders
+           WHERE id = ?`,
+          [id]
+        )
+      )[0];
+
+    // The row must still be readable after the write. If it is gone the update
+    // did not land, so report failure instead of a misleading success.
+    if (!updated) {
+      return errorResponse(
+        res,
+        'Failed to update order status',
+        500
+      );
+    }
+
+    // Audit only after the change is confirmed persisted, so the log can never
+    // record a status change that did not actually happen.
     await recordAudit({
       req,
       action: 'order.status_updated',
@@ -1287,16 +1319,6 @@ export async function updateOrderStatus(
         paymentStatusTo: paymentStatus || before?.payment_status || null,
       },
     });
-
-    const updated =
-      (
-        await executeQuery(
-          `SELECT *
-           FROM orders
-           WHERE id = ?`,
-          [id]
-        )
-      )[0];
 
     return successResponse(
       res,

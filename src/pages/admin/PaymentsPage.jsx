@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { CreditCard, ChevronLeft, ChevronRight, Save } from 'lucide-react';
 
 import api from '../../api/client';
+import { formatCurrency } from '../../utils/currency';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { AdminRoute } from '../../components/AdminRoute';
@@ -19,12 +20,7 @@ import { PERMISSIONS, hasPermission } from '../../utils/roles';
 
 const PAGE_SIZE = 20;
 
-const money = (value, currency = 'INR') =>
-  new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: currency === 'INR' ? 'INR' : currency,
-    maximumFractionDigits: 2,
-  }).format(Number(value || 0));
+const money = formatCurrency;
 
 /**
  * Transaction list.

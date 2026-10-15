@@ -1207,5 +1207,3 @@ const ProductDetailsPage = () => {
     </div>
   );
 };
-
-import ProductDetailsPage from './pages/ProductDetailsPage';
