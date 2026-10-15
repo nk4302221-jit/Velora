@@ -253,7 +253,6 @@ export const WebsiteSettingsPage = () => (
       portalTitle="Super Admin"
       portalSubtitle="Platform owner console"
       accentColor="#7c2d12"
-      homePath="/super-admin/dashboard"
       navItems={SUPER_ADMIN_NAV}
     >
       <WebsiteSettings />

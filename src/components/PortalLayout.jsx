@@ -19,7 +19,6 @@ export const PortalLayout = ({
   portalSubtitle,
   accentColor = '#1e3a8a',
   navItems,
-  homePath,
   children,
 }) => {
   const { user, logout } = useAuth();
@@ -140,9 +139,13 @@ export const PortalLayout = ({
 
         {/* Sidebar footer */}
         <div className="portal-sidebar-foot">
+          {/* Customer-facing storefront homepage. "/" is the public
+              HomePage route in App.jsx and is intentionally reachable for
+              every signed-in role, so this is a plain client-side Link. */}
           <Link
-            to={homePath || '/'}
+            to="/"
             className="admin-nav-link portal-nav-link-sm"
+            data-testid="view-storefront-link"
           >
             <ExternalLink size={16} />
             <span>View Storefront</span>

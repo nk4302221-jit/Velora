@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 750" width="1000" height="750" role="img" aria-label="Professional mirrorless camera with large lens">
+  <defs>
+    <radialGradient id="cbg" cx="50%" cy="34%" r="80%">
+      <stop offset="0%" stop-color="#2a3a63"/>
+      <stop offset="52%" stop-color="#141d33"/>
+      <stop offset="100%" stop-color="#070b15"/>
+    </radialGradient>
+    <radialGradient id="cspot" cx="50%" cy="28%" r="48%">
+      <stop offset="0%" stop-color="#93c5fd" stop-opacity="0.34"/>
+      <stop offset="100%" stop-color="#93c5fd" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="cbody" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#39465e"/>
+      <stop offset="50%" stop-color="#1c2536"/>
+      <stop offset="100%" stop-color="#0a1120"/>
+    </linearGradient>
+    <linearGradient id="cgrip" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0d1524"/>
+      <stop offset="100%" stop-color="#25324a"/>
+    </linearGradient>
+    <linearGradient id="cbarrel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#2b364c"/>
+      <stop offset="100%" stop-color="#0b1120"/>
+    </linearGradient>
+    <linearGradient id="cring" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#7f8ea6"/>
+      <stop offset="50%" stop-color="#dbe3ef"/>
+      <stop offset="100%" stop-color="#7f8ea6"/>
+    </linearGradient>
+    <radialGradient id="cglass" cx="42%" cy="34%" r="72%">
+      <stop offset="0%" stop-color="#60a5fa"/>
+      <stop offset="40%" stop-color="#1e3a8a"/>
+      <stop offset="75%" stop-color="#0b1424"/>
+      <stop offset="100%" stop-color="#05070d"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1000" height="750" fill="url(#cbg)"/>
+  <rect width="1000" height="750" fill="url(#cspot)"/>
+  <ellipse cx="500" cy="600" rx="280" ry="34" fill="#000000" opacity="0.5"/>
+
+  <!-- body -->
+  <rect x="250" y="250" width="500" height="300" rx="30" fill="url(#cbody)"/>
+  <rect x="250" y="250" width="500" height="300" rx="30" fill="none" stroke="#060a12" stroke-width="3"/>
+  <!-- grip (right) -->
+  <path d="M690 262 q56 6 60 60 v178 q-4 60 -62 66 q-8 -152 2 -304 z" fill="url(#cgrip)"/>
+  <g stroke="#0a1120" stroke-width="2.4" opacity="0.5">
+    <line x1="710" y1="300" x2="744" y2="300"/>
+    <line x1="710" y1="336" x2="746" y2="336"/>
+    <line x1="710" y1="372" x2="746" y2="372"/>
+    <line x1="710" y1="408" x2="746" y2="408"/>
+    <line x1="710" y1="444" x2="744" y2="444"/>
+  </g>
+
+  <!-- top hump / viewfinder -->
+  <path d="M400 250 q10 -66 90 -66 h60 q80 0 90 66 z" fill="url(#cbody)"/>
+  <path d="M400 250 q10 -66 90 -66 h60 q80 0 90 66 z" fill="none" stroke="#060a12" stroke-width="2.4"/>
+  <!-- hot shoe -->
+  <rect x="466" y="196" width="68" height="14" rx="4" fill="#334155"/>
+  <!-- dials -->
+  <circle cx="360" cy="236" r="26" fill="url(#cring)"/>
+  <circle cx="360" cy="236" r="17" fill="#1c2536"/>
+  <g stroke="#94a3b8" stroke-width="2" opacity="0.8">
+    <line x1="360" y1="216" x2="360" y2="224"/>
+    <line x1="343" y1="236" x2="351" y2="236"/>
+    <line x1="369" y1="236" x2="377" y2="236"/>
+  </g>
+  <circle cx="646" cy="236" r="22" fill="url(#cring)"/>
+  <circle cx="646" cy="236" r="14" fill="#1c2536"/>
+  <!-- shutter button (gold) -->
+  <circle cx="706" cy="252" r="17" fill="#f5b942"/>
+  <circle cx="706" cy="252" r="10" fill="#f59e0b"/>
+
+  <!-- lens barrel -->
+  <rect x="392" y="330" width="216" height="230" rx="24" fill="url(#cbarrel)"/>
+  <rect x="384" y="356" width="232" height="24" rx="12" fill="url(#cring)" opacity="0.85"/>
+  <rect x="384" y="470" width="232" height="16" rx="8" fill="url(#cring)" opacity="0.5"/>
+  <!-- focus ring knurl -->
+  <g stroke="#0a1120" stroke-width="2" opacity="0.45">
+    <line x1="404" y1="392" x2="596" y2="392"/>
+    <line x1="404" y1="410" x2="596" y2="410"/>
+    <line x1="404" y1="428" x2="596" y2="428"/>
+  </g>
+
+  <!-- lens front glass -->
+  <circle cx="500" cy="450" r="104" fill="#0b1120" stroke="#060a12" stroke-width="4"/>
+  <circle cx="500" cy="450" r="88" fill="url(#cglass)"/>
+  <circle cx="500" cy="450" r="88" fill="none" stroke="#3b82f6" stroke-width="2" opacity="0.4"/>
+  <!-- aperture blades hint -->
+  <g fill="#0a1526" opacity="0.55">
+    <polygon points="500,382 546,414 512,414"/>
+    <polygon points="568,450 536,496 536,452"/>
+    <polygon points="500,518 454,486 488,486"/>
+    <polygon points="432,450 464,404 464,448"/>
+  </g>
+  <!-- reflections -->
+  <ellipse cx="470" cy="416" rx="40" ry="24" fill="#ffffff" opacity="0.16" transform="rotate(-24 470 416)"/>
+  <circle cx="534" cy="486" r="10" fill="#bfdbfe" opacity="0.35"/>
+
+  <!-- red record accent -->
+  <circle cx="300" cy="300" r="8" fill="#ef4444"/>
+</svg>

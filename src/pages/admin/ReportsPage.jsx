@@ -365,7 +365,6 @@ export const ReportsPage = () => (
       portalTitle="Admin Portal"
       portalSubtitle="Store operations"
       accentColor="#1e3a8a"
-      homePath="/admin/dashboard"
       navItems={ADMIN_NAV}
     >
       <ReportsContent />
@@ -381,7 +380,6 @@ export const SuperAdminReportsPage = () => (
       portalTitle="Super Admin"
       portalSubtitle="Platform owner console"
       accentColor="#7c2d12"
-      homePath="/super-admin/dashboard"
       navItems={SUPER_ADMIN_NAV}
     >
       <ReportsContent />

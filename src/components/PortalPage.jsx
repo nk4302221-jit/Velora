@@ -23,7 +23,6 @@ const PORTALS = {
     portalTitle: 'Super Admin',
     portalSubtitle: 'Full platform control',
     accentColor: '#7c3aed',
-    homePath: '/super-admin/dashboard',
   },
   admin: {
     Guard: AdminRoute,
@@ -31,7 +30,6 @@ const PORTALS = {
     portalTitle: 'Admin Portal',
     portalSubtitle: 'Store operations',
     accentColor: '#1e3a8a',
-    homePath: '/admin/dashboard',
   },
   customer: {
     Guard: CustomerRoute,
@@ -39,7 +37,6 @@ const PORTALS = {
     portalTitle: 'My Account',
     portalSubtitle: 'Orders, returns and reviews',
     accentColor: '#047857',
-    homePath: '/customer/dashboard',
   },
 };
 
@@ -58,7 +55,6 @@ export const PortalPage = ({ portal, children }) => {
         portalTitle={config.portalTitle}
         portalSubtitle={config.portalSubtitle}
         accentColor={config.accentColor}
-        homePath={config.homePath}
         navItems={config.navItems}
       >
         {children}

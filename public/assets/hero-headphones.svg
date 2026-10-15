@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 750" width="1000" height="750" role="img" aria-label="Premium wireless over-ear headphones">
+  <defs>
+    <radialGradient id="hbg" cx="50%" cy="34%" r="80%">
+      <stop offset="0%" stop-color="#234a7d"/>
+      <stop offset="52%" stop-color="#122036"/>
+      <stop offset="100%" stop-color="#070d18"/>
+    </radialGradient>
+    <radialGradient id="hspot" cx="50%" cy="28%" r="48%">
+      <stop offset="0%" stop-color="#7db4ff" stop-opacity="0.42"/>
+      <stop offset="100%" stop-color="#7db4ff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="hcup" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#3b4a63"/>
+      <stop offset="48%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0b1220"/>
+    </linearGradient>
+    <linearGradient id="hband" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#5a6b85"/>
+      <stop offset="100%" stop-color="#1c2740"/>
+    </linearGradient>
+    <linearGradient id="hmetal" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#8ea3bf"/>
+      <stop offset="50%" stop-color="#e8eef7"/>
+      <stop offset="100%" stop-color="#8ea3bf"/>
+    </linearGradient>
+    <radialGradient id="hcushion" cx="42%" cy="36%" r="70%">
+      <stop offset="0%" stop-color="#243044"/>
+      <stop offset="100%" stop-color="#070c16"/>
+    </radialGradient>
+    <linearGradient id="hglow" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#60a5fa"/>
+      <stop offset="100%" stop-color="#2563eb"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1000" height="750" fill="url(#hbg)"/>
+  <rect width="1000" height="750" fill="url(#hspot)"/>
+  <ellipse cx="500" cy="628" rx="260" ry="34" fill="#000000" opacity="0.5"/>
+  <ellipse cx="500" cy="600" rx="150" ry="16" fill="#60a5fa" opacity="0.12"/>
+
+  <!-- headband -->
+  <path d="M292 430 C292 232 708 232 708 430" fill="none" stroke="url(#hband)" stroke-width="44" stroke-linecap="round"/>
+  <path d="M292 430 C292 232 708 232 708 430" fill="none" stroke="url(#hmetal)" stroke-width="9" stroke-linecap="round" opacity="0.55"/>
+  <path d="M330 300 C400 250 600 250 670 300" fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round" opacity="0.12"/>
+
+  <!-- left slider + cup -->
+  <rect x="292" y="322" width="34" height="86" rx="15" fill="url(#hmetal)" opacity="0.9"/>
+  <g>
+    <rect x="238" y="372" width="132" height="196" rx="58" fill="url(#hcup)" stroke="#060a12" stroke-width="3"/>
+    <rect x="258" y="398" width="92" height="146" rx="44" fill="url(#hcushion)"/>
+    <rect x="258" y="398" width="92" height="146" rx="44" fill="none" stroke="#334155" stroke-width="1.5" opacity="0.6"/>
+    <circle cx="304" cy="471" r="12" fill="url(#hglow)"/>
+    <circle cx="304" cy="471" r="20" fill="#60a5fa" opacity="0.25"/>
+    <path d="M262 404 q46 -20 84 6" fill="none" stroke="#ffffff" stroke-width="4" opacity="0.14" stroke-linecap="round"/>
+  </g>
+
+  <!-- right slider + cup -->
+  <rect x="674" y="322" width="34" height="86" rx="15" fill="url(#hmetal)" opacity="0.9"/>
+  <g>
+    <rect x="630" y="372" width="132" height="196" rx="58" fill="url(#hcup)" stroke="#060a12" stroke-width="3"/>
+    <rect x="650" y="398" width="92" height="146" rx="44" fill="url(#hcushion)"/>
+    <rect x="650" y="398" width="92" height="146" rx="44" fill="none" stroke="#334155" stroke-width="1.5" opacity="0.6"/>
+    <circle cx="696" cy="471" r="9" fill="#f5b942"/>
+    <circle cx="696" cy="471" r="16" fill="#f59e0b" opacity="0.25"/>
+    <path d="M654 404 q46 -20 84 6" fill="none" stroke="#ffffff" stroke-width="4" opacity="0.14" stroke-linecap="round"/>
+  </g>
+
+  <!-- bridge cushion under band top -->
+  <rect x="452" y="252" width="96" height="26" rx="13" fill="#111a2b" opacity="0.9"/>
+</svg>

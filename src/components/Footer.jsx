@@ -122,7 +122,6 @@ export const Footer = () => {
           <div>
             <h4 className="footer-col-title">Security & Tech</h4>
             <ul className="footer-links">
-              <li><span style={{ color: '#cbd5e1' }}>Stripe Test Sandbox Mode</span></li>
               <li><span style={{ color: '#cbd5e1' }}>JWT Auth with Bcrypt Hashing</span></li>
               <li><span style={{ color: '#cbd5e1' }}>Storj Decentralized Cloud Storage</span></li>
               <li><span style={{ color: '#cbd5e1' }}>Node-Cron Auto Expiry Jobs</span></li>

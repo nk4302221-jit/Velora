@@ -305,7 +305,6 @@ export const MyReturnsPage = () => (
       portalTitle="My Account"
       portalSubtitle="Orders, returns and reviews"
       accentColor="#047857"
-      homePath="/customer/dashboard"
       navItems={CUSTOMER_NAV}
     >
       <MyReturns />
