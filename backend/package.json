@@ -1,7 +1,7 @@
 {
   "name": "velora-backend",
   "version": "1.0.0",
-  "description": "Production E-Commerce Backend with MySQL, Express, JWT, Stripe Sandbox, and Cron",
+  "description": "Production E-Commerce Backend with MySQL, Express, JWT, Razorpay, and Cron",
   "type": "module",
   "main": "server.js",
   "scripts": {

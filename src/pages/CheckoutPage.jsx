@@ -533,7 +533,7 @@ export const CheckoutPage = () => {
       }
 
       // =====================================================
-      // STRIPE / COD
+      // CASH ON DELIVERY
       // =====================================================
 
       const createRes = await api.post(
@@ -554,72 +554,21 @@ export const CheckoutPage = () => {
       const order =
         createRes.data.data.order;
 
-      // =====================================================
-      // STRIPE
-      // =====================================================
-      if (paymentMethod === 'stripe') {
-        const stripeRes = await api.post(
-          '/orders/create-checkout-session',
-          {
-            orderId: order.id,
-          }
-        );
+      await api.post(
+        `/orders/${order.id}/confirm-payment`,
+        {}
+      );
 
-        if (stripeRes.data.success) {
-          const session =
-            stripeRes.data.data;
+      await clearCart();
 
-          // Real Stripe checkout
-          if (
-            session.checkoutUrl &&
-            !session.isSandboxMock
-          ) {
-            window.location.href =
-              session.checkoutUrl;
-          } else {
-            // Stripe sandbox confirmation
-            await api.post(
-              `/orders/${order.id}/confirm-payment`,
-              {
-                sessionId:
-                  session.sessionId,
-              }
-            );
+      showToast(
+        'Order placed successfully via Cash on Delivery!',
+        'success'
+      );
 
-            await clearCart();
-
-            showToast(
-              'Stripe payment confirmed! Order placed successfully.',
-              'success'
-            );
-
-            navigate(
-              `/orders/confirmed/${order.id}`
-            );
-          }
-        }
-      }
-
-      // =====================================================
-      // CASH ON DELIVERY
-      // =====================================================
-      else {
-        await api.post(
-          `/orders/${order.id}/confirm-payment`,
-          {}
-        );
-
-        await clearCart();
-
-        showToast(
-          'Order placed successfully via Cash on Delivery!',
-          'success'
-        );
-
-        navigate(
-          `/orders/confirmed/${order.id}`
-        );
-      }
+      navigate(
+        `/orders/confirmed/${order.id}`
+      );
     } catch (err) {
       console.error(
         'Checkout failed:',
@@ -1284,93 +1233,6 @@ export const CheckoutPage = () => {
                 </span>
               </div>
 
-              {/* Stripe */}
-              <div
-                onClick={() =>
-                  setPaymentMethod(
-                    'stripe'
-                  )
-                }
-                style={{
-                  border:
-                    paymentMethod ===
-                    'stripe'
-                      ? '2px solid var(--primary)'
-                      : '1px solid var(--border-color)',
-
-                  background:
-                    paymentMethod ===
-                    'stripe'
-                      ? 'var(--primary-light)'
-                      : '#ffffff',
-
-                  borderRadius:
-                    'var(--radius-md)',
-
-                  padding: '16px',
-
-                  cursor: 'pointer',
-
-                  display: 'flex',
-
-                  alignItems: 'center',
-
-                  justifyContent:
-                    'space-between',
-                }}
-                id="payment-option-stripe"
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                  }}
-                >
-                  <input
-                    type="radio"
-                    name="payment"
-                    checked={
-                      paymentMethod ===
-                      'stripe'
-                    }
-                    onChange={() =>
-                      setPaymentMethod(
-                        'stripe'
-                      )
-                    }
-                    style={{
-                      cursor: 'pointer',
-                    }}
-                  />
-
-                  <div>
-                    <div
-                      style={{
-                        fontWeight: 700,
-                        fontSize: '15px',
-                        color: '#0f172a',
-                      }}
-                    >
-                      Stripe Sandbox
-                      Payments
-                    </div>
-
-                    <div
-                      style={{
-                        fontSize: '12px',
-                        color:
-                          'var(--text-muted)',
-                      }}
-                    >
-                      International cards
-                      with 3D Secure
-                      verification
-                    </div>
-                  </div>
-                </div>
-              </div>
-
               {/* COD */}
               <div
                 onClick={() =>
@@ -1636,13 +1498,6 @@ export const CheckoutPage = () => {
                 <Lock size={18} />
 
                 Pay with Razorpay ({formatINR(totals.total)})
-              </>
-            ) : paymentMethod ===
-              'stripe' ? (
-              <>
-                <Lock size={18} />
-
-                Pay with Stripe ({formatINR(totals.total)})
               </>
             ) : (
               'Confirm Order (Cash on Delivery)'

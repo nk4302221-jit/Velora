@@ -81,8 +81,8 @@ export async function createPaymentOrder(req, res) {
     });
 
     await executeQuery(
-      'UPDATE orders SET razorpay_order_id = ?, stripe_session_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [razorpayOrder.id, razorpayOrder.id, internalOrder.id]
+      'UPDATE orders SET razorpay_order_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [razorpayOrder.id, internalOrder.id]
     );
 
     return successResponse(
@@ -181,10 +181,10 @@ export async function verifyPayment(req, res) {
     const markPaid = await executeQuery(
       `UPDATE orders 
        SET payment_status = 'paid', order_status = 'confirmed',
-           razorpay_order_id = ?, razorpay_payment_id = ?, stripe_payment_id = ?,
+           razorpay_order_id = ?, razorpay_payment_id = ?,
            currency = 'INR', paid_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
        WHERE id = ? AND payment_status = 'pending'`,
-      [razorpayOrderId, razorpayPaymentId, razorpayPaymentId, orderId]
+      [razorpayOrderId, razorpayPaymentId, orderId]
     );
 
     if (Number(markPaid.affectedRows ?? 0) === 0) {

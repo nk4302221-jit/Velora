@@ -16,8 +16,6 @@ import managementRoutes from './routes/managementRoutes.js';
 import customerRoutes from './routes/customerRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
 import { configureGoogleOAuth } from './config/passport.js';
-import { createCheckoutSessionHandler } from './controllers/orderController.js';
-import { authenticate } from './middleware/authMiddleware.js';
 
 const app = express();
 
@@ -52,9 +50,6 @@ app.use('/api/super-admin', superAdminRoutes);
 app.use('/api/management', managementRoutes);
 app.use('/api/customer', customerRoutes);
 app.use('/api/payment', paymentRoutes);
-
-// Stripe checkout convenience endpoint
-app.post('/api/payment/create-checkout-session', authenticate, createCheckoutSessionHandler);
 
 // Global Error Handler
 app.use((err, req, res, next) => {

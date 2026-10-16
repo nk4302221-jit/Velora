@@ -1,7 +1,6 @@
 import express from 'express';
 import {
   createOrder,
-  createCheckoutSessionHandler,
   confirmOrderPayment,
   createRazorpayOrderHandler,
   verifyRazorpayPaymentHandler,
@@ -17,7 +16,6 @@ router.use(authenticate);
 router.get('/', getUserOrders);
 router.post('/', createOrder);
 router.get('/:id', getOrderById);
-router.post('/create-checkout-session', createCheckoutSessionHandler);
 router.post('/:id/confirm-payment', confirmOrderPayment);
 router.post('/razorpay/create-order', createRazorpayOrderHandler);
 router.post('/razorpay/verify-payment', verifyRazorpayPaymentHandler);

@@ -1,6 +1,5 @@
 import { executeQuery } from '../config/db.js';
 import { successResponse, errorResponse } from '../utils/responseHelper.js';
-import { createSubscriptionSession } from '../services/stripeService.js';
 import {
   createRazorpayOrder,
   verifyRazorpaySignature,
@@ -95,24 +94,11 @@ export async function subscribePlan(req, res) {
       );
     }
 
-    // For Paid Tiers (Silver / Gold), initiate Stripe checkout session
-    const session = await createSubscriptionSession({
-      planId: plan.id,
-      planName: plan.name,
-      price: plan.price,
-      customerEmail: req.user.email,
-      successUrl: `${clientUrl}/plans`,
-      cancelUrl: `${clientUrl}/plans`,
-    });
-
-    return successResponse(
+    // For Paid Tiers (Silver / Gold), use Razorpay. Stripe is no longer supported.
+    return errorResponse(
       res,
-      'Subscription checkout session initiated',
-      {
-        checkoutUrl: session.url,
-        sessionId: session.id,
-        isSandboxMock: session.isSandboxMock,
-      }
+      'Stripe checkout has been removed. Please use Razorpay to subscribe to paid plans.',
+      410
     );
   } catch (error) {
     console.error('SubscribePlan Error:', error);

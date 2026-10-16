@@ -924,7 +924,7 @@ export const AdminDashboardPage = () => {
                   marginTop: '4px',
                 }}
               >
-                Stripe & Razorpay Captured
+                Razorpay & COD Captured
               </div>
             </div>
 

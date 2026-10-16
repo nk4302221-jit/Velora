@@ -1,7 +1,6 @@
 import { executeQuery } from '../config/db.js';
 import { successResponse, errorResponse } from '../utils/responseHelper.js';
 import { isAdminRole } from '../utils/roleHelper.js';
-import { createCheckoutSession } from '../services/stripeService.js';
 import { createRazorpayOrder, verifyRazorpaySignature } from '../services/razorpayService.js';
 import { createPendingOrder, OrderServiceError, deductStockForItems } from '../services/orderService.js';
 
@@ -31,59 +30,10 @@ export async function createOrder(req, res) {
   }
 }
 
-export async function createCheckoutSessionHandler(req, res) {
-  try {
-    const userId = req.user.id;
-    const { orderId } = req.body;
-
-    if (!orderId) {
-      return errorResponse(res, 'Order ID is required to initiate Stripe checkout', 400);
-    }
-
-    const orders = await executeQuery('SELECT * FROM orders WHERE id = ? AND user_id = ?', [orderId, userId]);
-    if (orders.length === 0) {
-      return errorResponse(res, 'Order not found', 404);
-    }
-
-    const order = orders[0];
-    if (order.payment_status === 'paid') {
-      return errorResponse(res, 'This order has already been paid for.', 400);
-    }
-
-    const items = await executeQuery('SELECT * FROM order_items WHERE order_id = ?', [orderId]);
-
-    const clientUrl = process.env.CLIENT_URL || 'http://localhost:4000';
-    const session = await createCheckoutSession({
-      orderId,
-      items,
-      customerEmail: req.user.email,
-      successUrl: `${clientUrl}/orders/${orderId}`,
-      cancelUrl: `${clientUrl}/checkout`,
-      totalAmount: order.total_amount,
-    });
-
-    // Save Stripe session ID in orders table
-    await executeQuery(
-      'UPDATE orders SET stripe_session_id = ? WHERE id = ?',
-      [session.id, orderId]
-    );
-
-    return successResponse(res, 'Checkout session created', {
-      sessionId: session.id,
-      checkoutUrl: session.url,
-      isSandboxMock: session.isSandboxMock,
-    });
-  } catch (error) {
-    console.error('CreateCheckoutSession Error:', error);
-    return errorResponse(res, 'Failed to create checkout session', 500);
-  }
-}
-
 export async function confirmOrderPayment(req, res) {
   try {
     const userId = req.user.id;
     const { id } = req.params;
-    const { paymentIntentId, sessionId } = req.body;
 
     const orders = await executeQuery('SELECT * FROM orders WHERE id = ? AND user_id = ?', [id, userId]);
     if (orders.length === 0) {
@@ -95,38 +45,34 @@ export async function confirmOrderPayment(req, res) {
       return successResponse(res, 'Order is already confirmed and paid', { order });
     }
 
-    const isCod = order.payment_method === 'cod';
+    // Only Cash on Delivery orders are confirmed here. Online orders are
+    // confirmed exclusively by verifyRazorpayPaymentHandler() after the
+    // gateway signature has been verified server-side.
+    if (order.payment_method !== 'cod') {
+      return errorResponse(
+        res,
+        'Only Cash on Delivery orders can be confirmed without gateway verification',
+        400
+      );
+    }
 
     // Deduct stock for all order items
     const items = await executeQuery('SELECT product_id, quantity FROM order_items WHERE order_id = ?', [id]);
     await deductStockForItems(items);
 
-    let transactionId = null;
-    if (!isCod) {
-      transactionId = paymentIntentId || sessionId || `txn_stripe_${Date.now()}`;
-    }
-
     // COD orders are confirmed but intentionally stay "pending" until cash is collected.
     await executeQuery(
       `UPDATE orders 
-       SET order_status = 'confirmed', stripe_payment_id = ?, updated_at = CURRENT_TIMESTAMP
+       SET order_status = 'confirmed', updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
-      [transactionId, id]
+      [id]
     );
 
     // Record in payments table
     await executeQuery(
       `INSERT INTO payments (order_id, user_id, amount, currency, provider, payment_intent_id, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [
-        id,
-        userId,
-        order.total_amount,
-        order.currency || 'INR',
-        isCod ? 'cod' : 'stripe',
-        transactionId,
-        isCod ? 'pending' : 'succeeded',
-      ]
+       VALUES (?, ?, ?, ?, 'cod', NULL, 'pending')`,
+      [id, userId, order.total_amount, order.currency || 'INR']
     );
 
     // Clear user's cart now that order is confirmed
@@ -173,11 +119,10 @@ export async function createRazorpayOrderHandler(req, res) {
       },
     });
 
-    // Persist the Razorpay order id on the internal order (dedicated column,
-    // with legacy stripe_session_id kept for backwards compatibility).
+    // Persist the Razorpay order id on the internal order.
     await executeQuery(
-      'UPDATE orders SET razorpay_order_id = ?, stripe_session_id = ? WHERE id = ?',
-      [razorpayOrder.id, razorpayOrder.id, orderId]
+      'UPDATE orders SET razorpay_order_id = ? WHERE id = ?',
+      [razorpayOrder.id, orderId]
     );
 
     return successResponse(res, 'Razorpay order created successfully', {
@@ -234,10 +179,10 @@ export async function verifyRazorpayPaymentHandler(req, res) {
     const markPaid = await executeQuery(
       `UPDATE orders 
        SET payment_status = 'paid', order_status = 'confirmed',
-           razorpay_order_id = ?, razorpay_payment_id = ?, stripe_payment_id = ?,
+           razorpay_order_id = ?, razorpay_payment_id = ?,
            currency = 'INR', paid_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
        WHERE id = ? AND payment_status = 'pending'`,
-      [razorpayOrderId, razorpayPaymentId, razorpayPaymentId, orderId]
+      [razorpayOrderId, razorpayPaymentId, orderId]
     );
 
     if (Number(markPaid.affectedRows ?? 0) === 0) {

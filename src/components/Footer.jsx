@@ -60,7 +60,7 @@ export const Footer = () => {
               <ShieldCheck size={24} />
             </div>
             <div>
-              <div style={{ color: '#fff', fontWeight: 700, fontSize: '15px' }}>Stripe Sandbox Secure</div>
+              <div style={{ color: '#fff', fontWeight: 700, fontSize: '15px' }}>Secure Payments</div>
               <div style={{ fontSize: '13px', color: '#94a3b8' }}>End-to-end encrypted checkout</div>
             </div>
           </div>
@@ -93,7 +93,7 @@ export const Footer = () => {
               <BrandLogo size={34} textColor="#ffffff" />
             </div>
             <p style={{ fontSize: '14px', lineHeight: 1.6, maxWidth: '320px', color: '#94a3b8' }}>
-              Next-generation e-commerce ecosystem powered by secure Stripe payments, decentralized cloud storage, relational SQL architecture, and dynamic member passes.
+              Next-generation e-commerce ecosystem powered by secure Razorpay payments, decentralized cloud storage, relational SQL architecture, and dynamic member passes.
             </p>
           </div>
 

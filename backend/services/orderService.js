@@ -28,7 +28,7 @@ export class OrderServiceError extends Error {
  * @returns {Promise<{orderId:number, orderNumber:string, totalAmount:number, subtotal:number, discount:number, shipping:number, currency:string, order:Object}>}
  */
 export async function createPendingOrder({ userId, addressId, paymentMethod = 'razorpay' }) {
-  const method = ['razorpay', 'stripe', 'cod'].includes(paymentMethod) ? paymentMethod : 'razorpay';
+  const method = ['razorpay', 'cod'].includes(paymentMethod) ? paymentMethod : 'razorpay';
 
   if (!addressId) {
     throw new OrderServiceError('Please select a delivery address for the order', 400);

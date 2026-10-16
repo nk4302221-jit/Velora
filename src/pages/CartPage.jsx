@@ -214,7 +214,7 @@ export const CartPage = () => {
               color: 'var(--text-muted)',
             }}
           >
-            <ShieldCheck size={16} color="var(--success)" /> Stripe Sandbox 256-Bit Encryption
+            <ShieldCheck size={16} color="var(--success)" /> Secure 256-Bit Encryption
           </div>
         </div>
       </div>
