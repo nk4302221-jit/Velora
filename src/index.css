@@ -1698,11 +1698,15 @@ h6 {
 
 .admin-content {
   min-width: 0;
-  height: 100vh;
+  min-height: 100vh;
+  height: auto;
   padding: 32px;
   background: var(--bg-app);
   overflow-x: hidden;
-  overflow-y: auto;
+  /* Keep the document as the primary vertical scroll container.
+     A separate 100vh content scroller can trap wheel/touch scrolling
+     and make long portal pages feel like a nested panel. */
+  overflow-y: visible;
   box-sizing: border-box;
 }
 
