@@ -1278,11 +1278,11 @@ export async function updateOrderStatus(
            CURRENT_TIMESTAMP
 
        WHERE id = ?`,
-      [
-        orderStatus,
-        paymentStatus,
-        id,
-      ]
+     [
+       orderStatus ?? null,
+       paymentStatus ?? null,
+       id,
+     ]
     );
 
     const updated =
