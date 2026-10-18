@@ -2592,19 +2592,36 @@ h6 {
 
   flex-direction: column;
 
+  min-width: 0;
+
+  /* Full-height rail that scrolls with the page. The previous
+     `position: sticky; height: 100vh; overflow-y: auto` gave the sidebar its
+     own scroll container, so every portal rendered a second vertical
+     scrollbar inside the rail whenever the nav was taller than the window
+     (the sticky never engaged either: `#root { overflow-x: hidden }` makes
+     #root the scrollport of its descendants, so it cannot track the page).
+     The document is the only vertical scroller; the navy column stretches
+     the full page height behind .admin-sidebar-inner. */
+  position: static;
+
+  height: auto;
+
+  overflow: visible;
+}
+
+/* Inner column: fills the first viewport (so the footer sits at the rail's
+   bottom on short pages) and grows with the nav when the nav is taller than
+   the window. It never creates its own scroll container. */
+.admin-sidebar-inner {
+  display: flex;
+
+  flex-direction: column;
+
   gap: 8px;
 
   min-width: 0;
 
-  /* Sticky full-height rail. Lives here rather than as an inline style so the
-     responsive blocks below can actually reset it. */
-  position: sticky;
-
-  top: 0;
-
-  height: 100vh;
-
-  overflow-y: auto;
+  min-height: calc(100vh - 48px);
 }
 
 .admin-nav-link {
@@ -2716,10 +2733,11 @@ h6 {
   height: auto;
   padding: 32px;
   background: var(--bg-app);
-  overflow-x: hidden;
-  /* Keep the document as the primary vertical scroll container.
-     A separate 100vh content scroller can trap wheel/touch scrolling
-     and make long portal pages feel like a nested panel. */
+  /* `clip` (not `hidden`) keeps stray horizontal overflow off the page
+     without forcing `overflow-y` to compute to `auto`: with `hidden`, the
+     visible y-axis silently became a scroll container too, which is a second,
+     hidden scrolling strategy next to the document. */
+  overflow-x: clip;
   overflow-y: visible;
   box-sizing: border-box;
 }
@@ -3192,6 +3210,21 @@ h6 {
   background-color: #f8fafc;
 }
 
+/* Portal tables carry identifiers, emails, dates, currency, badges and action
+   buttons — values that must never break mid-token. Cells stay on one line
+   and .table-responsive scrolls horizontally when the natural width does not
+   fit, instead of shredding an order id or an address across three rows.
+   Long-form columns (audit details, return reasons, coupon conditions, ...)
+   opt back into wrapping with .table-cell-wrap. */
+.admin-content .table th,
+.admin-content .table td {
+  white-space: nowrap;
+}
+
+.admin-content .table td.table-cell-wrap {
+  white-space: normal;
+}
+
 
 /* ============================================================
    PAGINATION
@@ -3614,12 +3647,9 @@ h6 {
     flex-direction: column;
     flex-wrap: nowrap;
     align-items: stretch;
-    position: sticky;
-    top: 0;
-    height: 100vh;
-    max-height: 100vh;
-    overflow-x: hidden;
-    overflow-y: auto;
+    position: static;
+    height: auto;
+    overflow: visible;
   }
 
   .portal-nav {
@@ -4227,6 +4257,13 @@ h6 {
     overflow: visible;
   }
 
+  /* Stacked layout: the rail is just a block at the top of the page, so it
+     must not reserve a viewport-height column of its own. */
+  .admin-sidebar-inner {
+    min-height: 0;
+    gap: 6px;
+  }
+
   .portal-mobile-toggle {
     display: flex !important;
     width: 100%;
@@ -4261,7 +4298,7 @@ h6 {
     min-width: 0;
     height: auto;
     padding: 16px;
-    overflow-x: hidden;
+    overflow-x: clip;
     overflow-y: visible;
     box-sizing: border-box;
   }

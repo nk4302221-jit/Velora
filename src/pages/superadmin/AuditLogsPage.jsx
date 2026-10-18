@@ -230,6 +230,7 @@ const AuditLogs = () => {
                       </td>
 
                       <td
+                        className="table-cell-wrap"
                         style={{
                           fontSize: 11,
                           fontFamily: 'monospace',

@@ -282,7 +282,7 @@ const Coupons = () => {
                 <tbody>
                   {coupons.map((coupon) => (
                     <tr key={coupon.id}>
-                      <td>
+                      <td className="table-cell-wrap">
                         <code
                           style={{
                             fontWeight: 700,

@@ -209,7 +209,7 @@ const Returns = () => {
                       </div>
                     </td>
 
-                    <td style={{ fontSize: 13, maxWidth: 220 }}>
+                    <td className="table-cell-wrap" style={{ fontSize: 13, maxWidth: 220 }}>
                       {entry.reason}
                       {entry.admin_note ? (
                         <div

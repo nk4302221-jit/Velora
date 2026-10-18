@@ -173,7 +173,7 @@ const MyReturns = () => {
                         {entry.order_number || `#${entry.order_id}`}
                       </Link>
                     </td>
-                    <td style={{ fontSize: 13, maxWidth: 220 }}>{entry.reason}</td>
+                    <td className="table-cell-wrap" style={{ fontSize: 13, maxWidth: 220 }}>{entry.reason}</td>
                     <td>
                       <StatusBadge status={entry.status} />
                     </td>
@@ -192,7 +192,7 @@ const MyReturns = () => {
                         ? new Date(entry.resolved_at).toLocaleDateString()
                         : '-'}
                     </td>
-                    <td style={{ fontSize: 12, color: 'var(--text-muted)', maxWidth: 200 }}>
+                    <td className="table-cell-wrap" style={{ fontSize: 12, color: 'var(--text-muted)', maxWidth: 200 }}>
                       {entry.admin_note || '-'}
                     </td>
                   </tr>

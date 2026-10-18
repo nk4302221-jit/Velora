@@ -60,112 +60,118 @@ export const PortalLayout = ({
           borderRight: `3px solid ${accentColor}`,
         }}
       >
-        <div className="portal-sidebar-head">
-          <div
-            className="badge"
-            style={{
-              background: accentColor,
-              color: '#fff',
-              marginBottom: '10px',
-            }}
-          >
-            {roleLabel(user?.role)}
+        {/* Single inner column: it fills the first viewport (so the footer
+            lands at the rail's bottom on short pages) and grows with the nav
+            when the nav is taller than the window, while the aside itself
+            stretches the full page height behind it. */}
+        <div className="admin-sidebar-inner">
+          <div className="portal-sidebar-head">
+            <div
+              className="badge"
+              style={{
+                background: accentColor,
+                color: '#fff',
+                marginBottom: '10px',
+              }}
+            >
+              {roleLabel(user?.role)}
+            </div>
+
+            <h2 className="portal-sidebar-title">
+              {portalTitle}
+            </h2>
+
+            <p className="portal-sidebar-subtitle">
+              {portalSubtitle}
+            </p>
+
+            <p className="portal-sidebar-email">
+              {user?.email}
+            </p>
           </div>
 
-          <h2 className="portal-sidebar-title">
-            {portalTitle}
-          </h2>
-
-          <p className="portal-sidebar-subtitle">
-            {portalSubtitle}
-          </p>
-
-          <p className="portal-sidebar-email">
-            {user?.email}
-          </p>
-        </div>
-
-        {/* Mobile menu button */}
-        <button
-          type="button"
-          className="admin-nav-link portal-mobile-toggle"
-          onClick={() =>
-            setMobileNavOpen((prev) => !prev)
-          }
-          aria-expanded={mobileNavOpen}
-          aria-label="Toggle portal navigation"
-        >
-          {mobileNavOpen ? (
-            <X size={18} />
-          ) : (
-            <Menu size={18} />
-          )}
-
-          <span>
-            {mobileNavOpen ? 'Close Menu' : 'Menu'}
-          </span>
-        </button>
-
-        {/* Navigation */}
-        <nav
-          className={`portal-nav${
-            mobileNavOpen ? ' is-open' : ''
-          }`}
-        >
-          {visibleItems.map((item) => {
-            const Icon = item.icon;
-
-            return (
-              <Link
-                key={item.to}
-                to={item.to}
-                end={item.end}
-                className="admin-nav-link"
-                onClick={() => setMobileNavOpen(false)}
-              >
-                {Icon ? <Icon size={18} /> : null}
-
-                <span>{item.label}</span>
-
-                {item.badge ? (
-                  <span className="nav-badge-count">
-                    {item.badge}
-                  </span>
-                ) : null}
-              </Link>
-            );
-          })}
-        </nav>
-
-        {/* Sidebar footer */}
-        <div className="portal-sidebar-foot">
-          {/* Customer-facing storefront homepage. "/" is the public
-              HomePage route in App.jsx and is intentionally reachable for
-              every signed-in role, so this is a plain client-side Link. */}
-          <Link
-            to="/"
-            className="admin-nav-link portal-nav-link-sm"
-            data-testid="view-storefront-link"
-          >
-            <ExternalLink size={16} />
-            <span>View Storefront</span>
-          </Link>
-
+          {/* Mobile menu button */}
           <button
             type="button"
-            onClick={handleLogout}
-            disabled={loggingOut}
-            className="admin-nav-link portal-logout"
-            data-testid="portal-logout-btn"
+            className="admin-nav-link portal-mobile-toggle"
+            onClick={() =>
+              setMobileNavOpen((prev) => !prev)
+            }
+            aria-expanded={mobileNavOpen}
+            aria-label="Toggle portal navigation"
           >
-            <LogOut size={18} />
+            {mobileNavOpen ? (
+              <X size={18} />
+            ) : (
+              <Menu size={18} />
+            )}
 
             <span>
-              {loggingOut
-                ? 'Signing out...'
-                : 'Sign Out'}
+              {mobileNavOpen ? 'Close Menu' : 'Menu'}
             </span>
           </button>
+
+          {/* Navigation */}
+          <nav
+            className={`portal-nav${
+              mobileNavOpen ? ' is-open' : ''
+            }`}
+          >
+            {visibleItems.map((item) => {
+              const Icon = item.icon;
+
+              return (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  end={item.end}
+                  className="admin-nav-link"
+                  onClick={() => setMobileNavOpen(false)}
+                >
+                  {Icon ? <Icon size={18} /> : null}
+
+                  <span>{item.label}</span>
+
+                  {item.badge ? (
+                    <span className="nav-badge-count">
+                      {item.badge}
+                    </span>
+                  ) : null}
+                </Link>
+              );
+            })}
+          </nav>
+
+          {/* Sidebar footer */}
+          <div className="portal-sidebar-foot">
+            {/* Customer-facing storefront homepage. "/" is the public
+                HomePage route in App.jsx and is intentionally reachable for
+                every signed-in role, so this is a plain client-side Link. */}
+            <Link
+              to="/"
+              className="admin-nav-link portal-nav-link-sm"
+              data-testid="view-storefront-link"
+            >
+              <ExternalLink size={16} />
+              <span>View Storefront</span>
+            </Link>
+
+            <button
+              type="button"
+              onClick={handleLogout}
+              disabled={loggingOut}
+              className="admin-nav-link portal-logout"
+              data-testid="portal-logout-btn"
+            >
+              <LogOut size={18} />
+
+              <span>
+                {loggingOut
+                  ? 'Signing out...'
+                  : 'Sign Out'}
+              </span>
+            </button>
+          </div>
         </div>
       </aside>
 

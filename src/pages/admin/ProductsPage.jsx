@@ -508,7 +508,7 @@ const Products = () => {
                 <tbody>
                   {products.map((product) => (
                     <tr key={product.id}>
-                      <td>
+                      <td className="table-cell-wrap">
                         <div
                           style={{
                             display: 'flex',
