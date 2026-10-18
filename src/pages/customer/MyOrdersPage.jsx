@@ -27,7 +27,7 @@ import { CUSTOMER_NAV } from '../../config/portalNav';
 
 const money = formatINR;
 
-const StepIcon = ({ reached, isLast }) => {
+const StepIcon = ({ reached }) => {
   if (!reached) {
     return (
       <span
@@ -54,7 +54,7 @@ const StepIcon = ({ reached, isLast }) => {
         width: 26,
         height: 26,
         borderRadius: '50%',
-        background: isLast ? 'var(--success)' : 'var(--primary)',
+        background: '#16a34a',
         color: '#fff',
         display: 'flex',
         alignItems: 'center',
@@ -97,14 +97,14 @@ const TrackingTimeline = ({ tracking }) => {
                 alignItems: 'center',
               }}
             >
-              <StepIcon reached={step.reached} isLast={isLast} />
+              <StepIcon reached={step.reached} />
 
               {!isLast ? (
                 <div
                   style={{
                     flex: 1,
                     width: 2,
-                    background: step.reached ? 'var(--primary)' : 'var(--border-color)',
+                    background: step.reached ? '#16a34a' : 'var(--border-color)',
                   }}
                 />
               ) : null}

@@ -35,6 +35,7 @@ export const ProductsPage = () => {
   // =====================================================
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [brands, setBrands] = useState([]);
   const [totalPages, setTotalPages] = useState(1);
   const [totalProducts, setTotalProducts] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -65,6 +66,28 @@ export const ProductsPage = () => {
     };
 
     loadCategories();
+  }, []);
+
+  // =====================================================
+  // LOAD BRANDS
+  // Sourced from the catalog so the filter can never drift
+  // from the products actually on sale.
+  // =====================================================
+  useEffect(() => {
+    const loadBrands = async () => {
+      try {
+        const res = await api.get('/products/brands');
+
+        if (res.data?.success) {
+          setBrands(res.data.data?.brands || []);
+        }
+      } catch (err) {
+        console.error('Failed to load brands:', err);
+        setBrands([]);
+      }
+    };
+
+    loadBrands();
   }, []);
 
   // =====================================================
@@ -194,20 +217,6 @@ export const ProductsPage = () => {
     setSearchInput('');
     setSearchParams(new URLSearchParams());
   };
-
-  // =====================================================
-  // BRANDS
-  // =====================================================
-  const brandsList = [
-    'Sony',
-    'Apple',
-    'Bose',
-    'Samsung',
-    'Dell',
-    'Canon',
-    'Logitech',
-    'Anker',
-  ];
 
   return (
     <div
@@ -404,7 +413,7 @@ export const ProductsPage = () => {
                 All Brands
               </option>
 
-              {brandsList.map((b) => (
+              {brands.map((b) => (
                 <option
                   key={b}
                   value={b}

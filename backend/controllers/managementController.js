@@ -1059,12 +1059,27 @@ export async function resolveReturnRequest(req, res) {
       [status, adminNote || null, resolvedRefund, returnId]
     );
 
-    // Reflect the refund on the order so payment history stays truthful.
-    if (status === 'refunded') {
+    // Reflect the refund on the order so payment history stays truthful, and
+    // return the goods to inventory. A refund is a one-way transition: if the
+    // request was already refunded, the stock restore must not run again or it
+    // would invent inventory on every repeated call.
+    if (status === 'refunded' && existing[0].status !== 'refunded') {
       await executeQuery(
         "UPDATE orders SET payment_status = 'refunded', updated_at = CURRENT_TIMESTAMP WHERE id = ?",
         [existing[0].order_id]
       );
+
+      const refundItems = await executeQuery(
+        'SELECT product_id, quantity FROM order_items WHERE order_id = ?',
+        [existing[0].order_id]
+      );
+
+      for (const item of refundItems) {
+        await executeQuery(
+          'UPDATE products SET stock = stock + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+          [Number(item.quantity || 0), item.product_id]
+        );
+      }
     }
 
     await recordAudit({

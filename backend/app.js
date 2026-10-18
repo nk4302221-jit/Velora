@@ -36,6 +36,21 @@ app.get('/api/health', (req, res) => {
   res.json({ success: true, message: 'Velora E-Commerce API is running healthy', timestamp: new Date().toISOString() });
 });
 
+// Root info route. This is an API-only server: the frontend is served by Vite
+// at http://localhost:5173 during development (and by the static build in
+// production). Hitting / used to answer `Cannot GET /`, which reads like a
+// backend failure even though the API is healthy, so answer with a short pointer
+// instead. It is registered before the API routers and matches only `/`.
+app.get('/', (req, res) => {
+  res.json({
+    success: true,
+    service: 'Velora E-Commerce API',
+    message: 'API is running. Frontend is served at http://localhost:5173; health check at /api/health',
+    health: '/api/health',
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // Mount REST API Endpoints
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);

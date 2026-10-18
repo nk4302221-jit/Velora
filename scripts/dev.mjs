@@ -821,13 +821,26 @@ async function claimPorts() {
   const previous = readState();
   const recorded = recordedChildPids(previous);
 
-  if (previous?.pid && previous.pid !== process.pid && pidAlive(previous.pid)) {
+  const previousAlive = Boolean(
+    previous?.pid && previous.pid !== process.pid && pidAlive(previous.pid),
+  );
+  // Recorded children that are still running. They are only "orphans" when the
+  // dev.mjs that spawned them is gone; while it is alive they are the live stack
+  // and killing them takes down a healthy frontend/backend under the user.
+  const liveRecorded = [...recorded].filter((pid) => pid !== process.pid && pidAlive(pid));
+
+  if (previousAlive) {
     const owner = processInfo(previous.pid);
+    const ownerIsDev = Boolean(owner && norm(owner.cmd).includes(norm(path.join(root, 'scripts'))));
     // A live dev session we started earlier. Starting a second one is exactly
     // the duplicate-Vite case we are preventing, so refuse instead of silently
-    // fighting over the port. If the PID was recycled by something unrelated,
-    // the command line check below keeps us from refusing forever.
-    if (owner && norm(owner.cmd).includes(norm(path.join(root, 'scripts')))) {
+    // fighting over the port. The command line is the strongest proof, but it is
+    // not always readable: the bulk CIM query can time out (this project lives
+    // on a OneDrive path), and a null verdict used to fall through to the orphan
+    // sweep below, which killed the still-live session's children. A live
+    // recorded child is independent proof that the session is alive, so refuse
+    // on either signal rather than assuming the process is a recycled PID.
+    if (ownerIsDev || liveRecorded.length > 0) {
       log(
         `[dev] A Velora dev server is already running (pid ${previous.pid}).\n` +
           `[dev] Stop it first, or run:  taskkill /PID ${previous.pid} /T /F`,
@@ -838,11 +851,15 @@ async function claimPorts() {
 
   // The parent is gone but its children are not: these are orphans from a
   // crash, a closed terminal, or a `node --watch` restart. We recorded the PIDs
-  // ourselves, so they are unambiguously ours.
-  const orphans = [...recorded].filter((pid) => pid !== process.pid && pidAlive(pid));
+  // ourselves, so they are unambiguously ours. Only reap them when the dev.mjs
+  // that owns them is no longer running.
+  const orphans = previousAlive ? [] : liveRecorded;
   if (orphans.length > 0) {
     log(`[dev] cleaning up ${orphans.length} orphaned process(es) from a previous run`);
-    for (const orphan of orphans) killTreeSync(orphan.pid, 'SIGKILL');
+    // `orphans` holds PIDs (numbers), so pass the PID itself. The previous
+    // `orphan.pid` read `undefined` off a number, which made killTreeSync bail
+    // out early: the orphan sweep never actually terminated anything.
+    for (const orphan of orphans) killTreeSync(orphan, 'SIGKILL');
     await new Promise((resolve) => setTimeout(resolve, 300));
   }
   clearState();

@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import { executeQuery } from '../config/db.js';
 import { generateToken } from '../utils/jwtHelper.js';
 import { successResponse, errorResponse } from '../utils/responseHelper.js';
-import { sendVerificationEmail, sendPasswordResetEmail } from '../services/emailService.js';import { handleSocialAuth } from '../services/oauthService.js';
+import { sendVerificationEmail, sendPasswordResetEmail } from '../services/emailService.js';
 import { recordAudit } from '../utils/auditLog.js';
 import { getEffectivePermissions } from '../utils/adminPermissions.js';
 
@@ -533,28 +533,12 @@ export async function login(req, res) {
   }
 }
 
-export async function socialLogin(req, res) {
-  try {
-    const { provider, providerUserId, email, name, avatarUrl } = req.body;
-
-    if (!provider || !email) {
-      return errorResponse(res, 'Provider and email are required for social login', 400);
-    }
-
-    const result = await handleSocialAuth({
-      provider,
-      providerUserId: providerUserId || `social_${Date.now()}`,
-      email: email.toLowerCase().trim(),
-      name,
-      avatarUrl,
-    });
-
-    return successResponse(res, `${provider} login successful`, result);
-  } catch (error) {
-    console.error('Social Login Error:', error);
-    return errorResponse(res, error.message || 'Social login failed', 500);
-  }
-}
+// The old socialLogin handler was removed. It accepted client-supplied
+// { provider, email, name } from the request body and called handleSocialAuth,
+// minting a valid JWT for any asserted identity — a complete account-takeover
+// vector. Social sign-in now happens exclusively through the server-verified
+// Passport Google OAuth flow (googleOAuthCallback below), where the email and
+// profile come from Google's token exchange, not from the client.
 
 /**
  * Passport Google OAuth2 callback handler.
@@ -802,12 +786,14 @@ export async function forgotPassword(req, res) {
       [user.id, tokenHash, expiresAt]
     );
 
-    const emailResult = await sendPasswordResetEmail(user.email, user.full_name, token);
+    await sendPasswordResetEmail(user.email, user.full_name, token);
 
+    // Security: the raw reset token / link must NEVER be returned in the HTTP
+    // response. Anyone who can trigger this endpoint for a victim's email
+    // would otherwise receive a working account-takeover link. The token is
+    // delivered only through the email channel above.
     return successResponse(res, RESET_TOKEN_GENERIC_MESSAGE, {
       email: user.email,
-      resetLink: emailResult.resetLink,
-      demoToken: token, // Provided for easy development / sandbox testing (matches register behavior)
     });
   } catch (error) {
     console.error('Forgot Password Error:', error);

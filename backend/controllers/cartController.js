@@ -1,5 +1,6 @@
 import { executeQuery } from '../config/db.js';
 import { successResponse, errorResponse } from '../utils/responseHelper.js';
+import { resolveCoupon, CouponError } from '../services/couponService.js';
 
 // Helper to calculate pricing with member discounts
 function computeCartTotals(items, activePlanId) {
@@ -77,6 +78,64 @@ export async function getCart(req, res) {
   } catch (error) {
     console.error('GetCart Error:', error);
     return errorResponse(res, 'Failed to fetch shopping cart', 500);
+  }
+}
+
+/**
+ * POST /api/cart/coupon
+ *
+ * Validates a coupon code against the shopper's CURRENT cart and returns the
+ * discount it would apply, without redeeming it. The redemption itself happens
+ * atomically at order creation, so previewing a code never consumes usage.
+ */
+export async function validateCoupon(req, res) {
+  try {
+    const userId = req.user.id;
+    const { code } = req.body || {};
+
+    const userRows = await executeQuery('SELECT active_plan_id FROM users WHERE id = ?', [userId]);
+    const activePlanId = userRows[0]?.active_plan_id || null;
+
+    const carts = await executeQuery('SELECT id FROM cart WHERE user_id = ?', [userId]);
+    if (carts.length === 0) {
+      return errorResponse(res, 'Your cart is empty', 400);
+    }
+
+    const items = await executeQuery(
+      `SELECT ci.quantity, p.price, p.discount_price
+       FROM cart_items ci
+       JOIN products p ON p.id = ci.product_id
+       WHERE ci.cart_id = ?`,
+      [carts[0].id]
+    );
+
+    if (items.length === 0) {
+      return errorResponse(res, 'Your cart is empty', 400);
+    }
+
+    const totals = computeCartTotals(items, activePlanId);
+
+    // Coupon applies to the value left after product + membership discounts.
+    const base = Math.max(0, totals.subtotal - totals.discount);
+
+    const resolved = await resolveCoupon(code, base);
+
+    return successResponse(res, 'Coupon applied', {
+      code: resolved.code,
+      description: resolved.description,
+      couponDiscount: resolved.discount,
+      totals: {
+        ...totals,
+        couponDiscount: resolved.discount,
+        total: Number(Math.max(0, totals.total - resolved.discount).toFixed(2)),
+      },
+    });
+  } catch (error) {
+    if (error instanceof CouponError) {
+      return errorResponse(res, error.message, error.status);
+    }
+    console.error('ValidateCoupon Error:', error);
+    return errorResponse(res, 'Failed to validate coupon', 500);
   }
 }
 

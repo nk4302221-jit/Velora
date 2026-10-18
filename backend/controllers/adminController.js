@@ -1217,13 +1217,27 @@ export async function updateOrderStatus(
       paymentStatus,
     } = req.body;
 
-    const validOrderStatuses = [
+    // The forward-only happy path. 'cancelled' is handled separately as a
+    // terminal side-exit valid from any non-terminal state.
+    const ORDER_FLOW = [
       'pending',
       'confirmed',
       'processing',
       'shipped',
+      'out_for_delivery',
       'delivered',
+    ];
+
+    const validOrderStatuses = [
+      ...ORDER_FLOW,
       'cancelled',
+    ];
+
+    const validPaymentStatuses = [
+      'pending',
+      'paid',
+      'failed',
+      'refunded',
     ];
 
     if (
@@ -1239,10 +1253,23 @@ export async function updateOrderStatus(
       );
     }
 
+    if (
+      paymentStatus &&
+      !validPaymentStatuses.includes(
+        paymentStatus
+      )
+    ) {
+      return errorResponse(
+        res,
+        'Invalid payment status',
+        400
+      );
+    }
+
     const before =
       (
         await executeQuery(
-          `SELECT order_status, payment_status
+          `SELECT order_status, payment_status, payment_method
            FROM orders
            WHERE id = ?`,
           [id]
@@ -1259,6 +1286,52 @@ export async function updateOrderStatus(
       );
     }
 
+    // =====================================================
+    // STATUS TRANSITION VALIDATION
+    //
+    // An order may only move forward along ORDER_FLOW, or exit to 'cancelled'
+    // from any non-terminal state. Replaying the current status is a no-op.
+    // Backwards moves and changes out of a terminal state are rejected so a
+    // delivered order can never be reopened and a cancelled one never revived.
+    // =====================================================
+    const currentStatus = String(before.order_status || '').toLowerCase();
+    const terminalStatuses = ['delivered', 'cancelled'];
+
+    if (orderStatus && orderStatus !== currentStatus) {
+      const currentIndex = ORDER_FLOW.indexOf(currentStatus);
+      const nextIndex = ORDER_FLOW.indexOf(orderStatus);
+
+      const isForward =
+        currentIndex !== -1 &&
+        nextIndex !== -1 &&
+        nextIndex > currentIndex;
+
+      const isCancel =
+        orderStatus === 'cancelled' &&
+        !terminalStatuses.includes(currentStatus);
+
+      if (!isForward && !isCancel) {
+        return errorResponse(
+          res,
+          `Cannot change order status from "${currentStatus}" to "${orderStatus}"`,
+          400
+        );
+      }
+    }
+
+    // Marking a Cash on Delivery order delivered means the cash was collected,
+    // so the payment status follows automatically unless the caller sets it.
+    const markCodPaid =
+      orderStatus === 'delivered' &&
+      before.payment_method === 'cod' &&
+      before.payment_status !== 'paid';
+
+    const nextPaymentStatus =
+      paymentStatus ?? (markCodPaid ? 'paid' : null);
+
+    const shouldStampPaidAt =
+      nextPaymentStatus === 'paid' && before.payment_status !== 'paid';
+
     await executeQuery(
       `UPDATE orders
        SET
@@ -1274,16 +1347,44 @@ export async function updateOrderStatus(
              payment_status
            ),
 
+         paid_at =
+           CASE WHEN ? = 1 THEN CURRENT_TIMESTAMP ELSE paid_at END,
+
          updated_at =
            CURRENT_TIMESTAMP
 
        WHERE id = ?`,
      [
        orderStatus ?? null,
-       paymentStatus ?? null,
+       nextPaymentStatus,
+       shouldStampPaidAt ? 1 : 0,
        id,
      ]
     );
+
+    // Cancelling an order that already reserved stock returns it to inventory.
+    // A still-pending order was never deducted, so it is left untouched.
+    if (orderStatus === 'cancelled') {
+      const stockWasDeducted =
+        before.payment_status === 'paid' ||
+        ['confirmed', 'processing', 'shipped', 'out_for_delivery'].includes(
+          currentStatus
+        );
+
+      if (stockWasDeducted) {
+        const cancelItems = await executeQuery(
+          'SELECT product_id, quantity FROM order_items WHERE order_id = ?',
+          [id]
+        );
+
+        for (const item of cancelItems) {
+          await executeQuery(
+            'UPDATE products SET stock = stock + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+            [Number(item.quantity || 0), item.product_id]
+          );
+        }
+      }
+    }
 
     const updated =
       (
@@ -1316,7 +1417,8 @@ export async function updateOrderStatus(
         orderStatusFrom: before?.order_status ?? null,
         orderStatusTo: orderStatus || before?.order_status || null,
         paymentStatusFrom: before?.payment_status ?? null,
-        paymentStatusTo: paymentStatus || before?.payment_status || null,
+        paymentStatusTo:
+          nextPaymentStatus || before?.payment_status || null,
       },
     });
 

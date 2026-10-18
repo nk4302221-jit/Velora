@@ -80,7 +80,7 @@ export const LoginPage = () => {
       return false;
     }
 
-    navigate('/', {
+    navigate(target, {
       replace: true,
     });
 

@@ -368,10 +368,16 @@ export async function deleteAdmin(req, res) {
     // removes only the account and its own review submissions.
     await executeQuery('DELETE FROM users WHERE id = ?', [targetId]);
 
-    await recordAudit(req.user.id, 'DELETE_ADMIN', 'user', targetId, {
-      deleted_email: target.email,
-      deleted_full_name: target.full_name,
-      deleted_role: target.role,
+    await recordAudit({
+      req,
+      action: 'admin.deleted',
+      entityType: 'user',
+      entityId: targetId,
+      details: {
+        deleted_email: target.email,
+        deleted_full_name: target.full_name,
+        deleted_role: target.role,
+      },
     });
 
     return successResponse(res, 'Administrator deleted successfully', {

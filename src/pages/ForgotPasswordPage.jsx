@@ -9,7 +9,6 @@ export const ForgotPasswordPage = () => {
   const [email, setEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSent, setIsSent] = useState(false);
-  const [demoToken, setDemoToken] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -18,9 +17,6 @@ export const ForgotPasswordPage = () => {
       const res = await api.post('/auth/forgot-password', { email });
       if (res.data.success) {
         setIsSent(true);
-        if (res.data.data?.demoToken) {
-          setDemoToken(res.data.data.demoToken);
-        }
         showToast('Password reset link generated!', 'success');
       }
     } catch (err) {
@@ -46,14 +42,6 @@ export const ForgotPasswordPage = () => {
             <p style={{ fontSize: '14px', color: 'var(--text-main)', marginBottom: '20px' }}>
               A password reset link has been dispatched to <strong>{email}</strong>.
             </p>
-            {demoToken && (
-              <div style={{ background: 'var(--bg-surface)', padding: '12px', borderRadius: 'var(--radius-md)', marginBottom: '20px' }}>
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px' }}>Direct Reset Link:</div>
-                <Link to={`/reset-password?token=${demoToken}`} className="btn btn-primary btn-sm">
-                  Click to Reset Password
-                </Link>
-              </div>
-            )}
             <Link to="/login" className="btn btn-secondary btn-sm">Return to Login</Link>
           </div>
         ) : (

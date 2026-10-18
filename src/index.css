@@ -948,6 +948,210 @@ h6 {
     2px solid rgba(255, 255, 255, 0.1);
 }
 
+.hero-carousel {
+  width: 100%;
+
+  min-width: 0;
+}
+
+.hero-carousel .hero-img {
+  height: 320px;
+
+  max-height: none;
+
+  margin: 0 auto;
+}
+
+@media (max-width: 1024px) {
+  .hero-carousel .hero-img {
+    max-width: 600px;
+  }
+}
+
+@media (max-width: 768px) {
+  .hero-carousel .hero-img {
+    height: 260px;
+
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .hero-carousel .hero-img {
+    height: 220px;
+  }
+}
+
+.owl-carousel.hero-carousel .owl-nav {
+  position: absolute;
+
+  top: 50%;
+
+  left: 14px;
+
+  right: 14px;
+
+  transform: translateY(-50%);
+
+  display: flex;
+
+  justify-content: space-between;
+
+  margin: 0;
+
+  pointer-events: none;
+
+  z-index: 4;
+}
+
+.owl-carousel.hero-carousel .owl-nav button.owl-prev,
+.owl-carousel.hero-carousel .owl-nav button.owl-next {
+  display: inline-flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  width: 40px;
+
+  height: 40px;
+
+  padding: 0 !important;
+
+  border-radius: var(--radius-full);
+
+  border:
+    1px solid rgba(255, 255, 255, 0.25);
+
+  background: rgba(15, 23, 42, 0.7);
+
+  color: #ffffff;
+
+  font-size: 15px;
+
+  line-height: 1;
+
+  pointer-events: auto;
+
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.owl-carousel.hero-carousel .owl-nav button.owl-prev:hover,
+.owl-carousel.hero-carousel .owl-nav button.owl-next:hover {
+  background: var(--primary);
+
+  border-color: var(--primary);
+
+  color: #ffffff;
+}
+
+.owl-carousel.hero-carousel .owl-nav button.owl-prev:focus-visible,
+.owl-carousel.hero-carousel .owl-nav button.owl-next:focus-visible {
+  outline: 2px solid #ffffff;
+
+  outline-offset: 2px;
+}
+
+.hero-carousel .owl-dots {
+  position: absolute;
+
+  left: 0;
+
+  right: 0;
+
+  bottom: 14px;
+
+  text-align: center;
+
+  z-index: 4;
+}
+
+.hero-carousel .owl-dots .owl-dot span {
+  display: block;
+
+  width: 9px;
+  height: 9px;
+
+  margin: 5px;
+
+  border-radius: var(--radius-full);
+
+  background: rgba(255, 255, 255, 0.5);
+
+  transition:
+    background-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.hero-carousel .owl-dots .owl-dot.active span,
+.hero-carousel .owl-dots .owl-dot:hover span {
+  background: var(--accent);
+
+  transform: scale(1.2);
+}
+
+.owl-carousel.hero-carousel.hero-carousel-fallback {
+  display: block;
+}
+
+.hero-carousel-fallback .hero-slide:not(:first-child) {
+  display: none;
+}
+
+
+/* ============================================================
+   CATEGORIES CAROUSEL
+   ============================================================ */
+
+.category-carousel {
+  width: 100%;
+
+  min-width: 0;
+
+  padding-bottom: 4px;
+}
+
+.category-carousel .owl-stage {
+  display: flex;
+
+  align-items: stretch;
+}
+
+.category-carousel .owl-item {
+  float: none;
+
+  display: flex;
+
+  flex: 0 0 auto;
+}
+
+.category-carousel .owl-item > .card {
+  height: 100%;
+}
+
+.category-carousel.owl-grab,
+.category-carousel.owl-grab .owl-item {
+  cursor: grab;
+}
+
+.owl-carousel.category-carousel.category-carousel-fallback {
+  display: flex;
+
+  flex-wrap: wrap;
+
+  gap: 16px;
+}
+
+.category-carousel-fallback > .card {
+  flex: 1 1 180px;
+}
+
+.category-carousel-fallback > .owl-item {
+  display: none;
+}
+
 
 /* ============================================================
    PRODUCT GRID
@@ -1383,6 +1587,816 @@ h6 {
   white-space: nowrap;
 }
 
+
+/* ============================================================
+   3D VIP MEMBERSHIP CAROUSEL (homepage banner)
+   Pure CSS3 perspective / transform 3D coverflow.
+   Autoplay is driven by JS (MembershipCarousel.jsx) at 1000ms.
+   ============================================================ */
+
+.vip-banner {
+  position: relative;
+
+  background:
+    linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+
+  border-radius: var(--radius-lg);
+
+  /* Compact banner: total height is capped ~<500px on laptop screens. */
+  padding: 20px 30px 18px;
+
+  color: #ffffff;
+
+  margin-bottom: 44px;
+
+  box-shadow: var(--shadow-lg);
+
+  overflow: hidden;
+}
+
+/* Subtle glow so the 3D stage feels lit from the centre. */
+.vip-banner::after {
+  content: '';
+
+  position: absolute;
+
+  top: 55%;
+
+  left: 50%;
+
+  width: 70%;
+
+  height: 60%;
+
+  transform: translate(-50%, -50%);
+
+  background:
+    radial-gradient(
+      ellipse at center,
+      rgba(255, 255, 255, 0.18) 0%,
+      rgba(255, 255, 255, 0) 70%
+    );
+
+  pointer-events: none;
+
+  z-index: 0;
+}
+
+.vip-banner-head {
+  position: relative;
+
+  z-index: 1;
+
+  text-align: center;
+
+  max-width: 720px;
+
+  margin: 0 auto;
+}
+
+.vip-banner-badge {
+  background: rgba(255, 255, 255, 0.2);
+
+  padding: 3px 11px;
+
+  border-radius: var(--radius-full);
+
+  font-size: 11px;
+
+  font-weight: 700;
+
+  text-transform: uppercase;
+
+  letter-spacing: 0.5px;
+
+  display: inline-flex;
+
+  align-items: center;
+
+  gap: 6px;
+
+  margin-bottom: 10px;
+}
+
+.vip-banner-title {
+  font-size: 22px;
+
+  color: #ffffff;
+
+  margin: 0 0 6px;
+
+  line-height: 1.2;
+}
+
+.vip-banner-sub {
+  color: #e0f2fe;
+
+  font-size: 13.5px;
+
+  margin: 0 auto;
+
+  max-width: 540px;
+
+  line-height: 1.45;
+}
+
+.vip-banner-foot {
+  position: relative;
+
+  z-index: 1;
+
+  display: flex;
+
+  justify-content: center;
+
+  margin-top: 14px;
+}
+
+.vip-3d-status {
+  position: relative;
+
+  z-index: 1;
+
+  text-align: center;
+
+  color: #e0f2fe;
+
+  padding: 60px 0;
+}
+
+/* --- Stage -------------------------------------------------- */
+
+.vip-3d-stage {
+  position: relative;
+
+  z-index: 1;
+
+  height: 266px;
+
+  margin: 12px auto 0;
+
+  perspective: 1200px;
+
+  perspective-origin: 50% 47%;
+
+  overflow: hidden;
+}
+
+/* --- Card --------------------------------------------------- */
+
+.vip-3d-card {
+  --vip-text: #ffffff;
+  --vip-muted: rgba(255, 255, 255, 0.72);
+  --vip-accent: #60a5fa;
+  --vip-cta-bg: linear-gradient(135deg, #3b82f6, #2563eb);
+  --vip-cta-text: #ffffff;
+
+  position: absolute;
+
+  top: 50%;
+
+  left: 50%;
+
+  width: clamp(180px, 20vw, 232px);
+
+  min-height: 205px;
+
+  margin: 0;
+
+  padding: 14px 14px;
+
+  border-radius: 16px;
+
+  display: flex;
+
+  flex-direction: column;
+
+  text-align: left;
+
+  color: var(--vip-text);
+
+  background: rgba(15, 23, 42, 0.94);
+
+  border: 1px solid rgba(255, 255, 255, 0.16);
+
+  box-shadow: 0 18px 36px rgba(2, 6, 23, 0.5);
+
+  /* Base position: centered. Individual positions append their own
+     translate/rotate/scale on top of this origin. */
+  transform: translate(-50%, -50%);
+
+  transform-origin: 50% 50%;
+
+  transition:
+    transform 0.6s cubic-bezier(0.25, 0.8, 0.35, 1),
+    opacity 0.5s ease,
+    box-shadow 0.3s ease;
+
+  backface-visibility: hidden;
+
+  will-change: transform, opacity;
+}
+
+.vip-3d-card.is-center {
+  transform: translate(-50%, -50%) translateZ(55px) scale(1);
+
+  z-index: 4;
+
+  opacity: 1;
+
+  box-shadow: 0 22px 44px rgba(2, 6, 23, 0.55);
+}
+
+.vip-3d-card.is-right {
+  transform: translate(-50%, -50%) translateX(60%) translateZ(-55px) rotateY(-28deg) scale(0.84);
+
+  z-index: 3;
+
+  opacity: 0.95;
+}
+
+.vip-3d-card.is-left {
+  transform: translate(-50%, -50%) translateX(-60%) translateZ(-55px) rotateY(28deg) scale(0.84);
+
+  z-index: 3;
+
+  opacity: 0.95;
+}
+
+.vip-3d-card.is-far-right {
+  transform: translate(-50%, -50%) translateX(112%) translateZ(-130px) rotateY(-40deg) scale(0.66);
+
+  z-index: 2;
+
+  opacity: 0.45;
+}
+
+.vip-3d-card.is-far-left {
+  transform: translate(-50%, -50%) translateX(-112%) translateZ(-130px) rotateY(40deg) scale(0.66);
+
+  z-index: 2;
+
+  opacity: 0.45;
+}
+
+/* --- Plan finishes (gold / silver / free) -------------------- */
+
+.vip-3d-card.vip-theme-gold {
+  --vip-text: #fff7e6;
+  --vip-muted: rgba(255, 244, 214, 0.78);
+  --vip-accent: #f6c667;
+  --vip-cta-bg: linear-gradient(135deg, #f6c667, #d4af37);
+  --vip-cta-text: #3a2b05;
+
+  background: linear-gradient(160deg, #2c2410 0%, #1b1608 55%, #2e2611 100%);
+
+  border-color: rgba(246, 198, 103, 0.7);
+
+  box-shadow:
+    0 18px 40px rgba(212, 175, 55, 0.34),
+    inset 0 0 0 1px rgba(246, 198, 103, 0.18);
+}
+
+.vip-3d-card.vip-theme-gold.is-center {
+  box-shadow:
+    0 22px 52px rgba(212, 175, 55, 0.45),
+    inset 0 0 0 1px rgba(246, 198, 103, 0.25);
+}
+
+.vip-3d-card.vip-theme-silver {
+  --vip-text: #f1f5f9;
+  --vip-muted: rgba(226, 232, 240, 0.75);
+  --vip-accent: #cbd5e1;
+  --vip-cta-bg: linear-gradient(135deg, #e2e8f0, #94a3b8);
+  --vip-cta-text: #0f172a;
+
+  background: linear-gradient(160deg, #333b46 0%, #1b2029 60%, #2b323d 100%);
+
+  border-color: rgba(203, 213, 225, 0.6);
+
+  box-shadow: 0 18px 38px rgba(148, 163, 184, 0.3);
+}
+
+.vip-3d-card.vip-theme-free {
+  --vip-text: #0f172a;
+  --vip-muted: #475569;
+  --vip-accent: #2563eb;
+  --vip-cta-bg: linear-gradient(135deg, #3b82f6, #2563eb);
+  --vip-cta-text: #ffffff;
+
+  background: linear-gradient(160deg, #ffffff 0%, #eef4ff 100%);
+
+  border-color: rgba(59, 130, 246, 0.35);
+
+  box-shadow: 0 18px 38px rgba(37, 99, 235, 0.3);
+}
+
+/* --- Card content ------------------------------------------- */
+
+.vip-card-ribbon {
+  position: absolute;
+
+  top: -10px;
+
+  left: 50%;
+
+  transform: translateX(-50%);
+
+  background: linear-gradient(135deg, #f6c667, #d4af37);
+
+  color: #3a2b05;
+
+  font-size: 9.5px;
+
+  font-weight: 800;
+
+  letter-spacing: 0.4px;
+
+  text-transform: uppercase;
+
+  padding: 3px 10px;
+
+  border-radius: var(--radius-full);
+
+  white-space: nowrap;
+
+  box-shadow: 0 4px 10px rgba(212, 175, 55, 0.35);
+}
+
+.vip-card-top {
+  margin-bottom: 7px;
+}
+
+.vip-card-name {
+  font-size: 16px;
+
+  font-weight: 800;
+
+  margin: 0 0 4px;
+
+  color: var(--vip-text);
+}
+
+.vip-card-duration {
+  display: inline-flex;
+
+  align-items: center;
+
+  gap: 5px;
+
+  font-size: 11px;
+
+  color: var(--vip-muted);
+}
+
+.vip-card-price {
+  display: flex;
+
+  align-items: baseline;
+
+  gap: 5px;
+
+  margin-bottom: 6px;
+}
+
+.vip-card-price-value {
+  font-size: 25px;
+
+  font-weight: 800;
+
+  font-family: var(--font-display);
+
+  color: var(--vip-text);
+
+  line-height: 1;
+}
+
+.vip-card-price-unit {
+  font-size: 11px;
+
+  color: var(--vip-muted);
+}
+
+.vip-card-benefits {
+  list-style: none;
+
+  padding: 0;
+
+  margin: 0 0 7px;
+
+  flex: 1;
+
+  display: flex;
+
+  flex-direction: column;
+
+  gap: 3px;
+}
+
+.vip-card-benefits li {
+  display: flex;
+
+  align-items: flex-start;
+
+  gap: 6px;
+
+  font-size: 11px;
+
+  line-height: 1.3;
+
+  color: var(--vip-text);
+}
+
+.vip-card-benefits li svg {
+  color: var(--vip-accent);
+
+  flex-shrink: 0;
+
+  margin-top: 2px;
+}
+
+.vip-card-cta {
+  display: inline-flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  gap: 6px;
+
+  width: 100%;
+
+  padding: 7px 12px;
+
+  border-radius: 10px;
+
+  font-weight: 700;
+
+  font-size: 12.5px;
+
+  border: none;
+
+  text-decoration: none;
+
+  cursor: pointer;
+
+  background: var(--vip-cta-bg);
+
+  color: var(--vip-cta-text);
+
+  transition: filter 0.2s ease, transform 0.2s ease;
+}
+
+.vip-card-cta:hover,
+.vip-card-cta:focus-visible {
+  filter: brightness(1.07);
+
+  transform: translateY(-1px);
+}
+
+/* --- Pagination dots ---------------------------------------- */
+
+.vip-3d-dots {
+  position: absolute;
+
+  left: 0;
+
+  right: 0;
+
+  bottom: 6px;
+
+  display: flex;
+
+  justify-content: center;
+
+  gap: 8px;
+
+  z-index: 5;
+}
+
+.vip-3d-dot {
+  width: 8px;
+
+  height: 8px;
+
+  border-radius: var(--radius-full);
+
+  background: rgba(255, 255, 255, 0.4);
+
+  transition: background-color 0.3s ease, transform 0.3s ease;
+}
+
+.vip-3d-dot.is-active {
+  background: #fef08a;
+
+  transform: scale(1.25);
+}
+
+/* --- Responsive --------------------------------------------- */
+
+@media (max-width: 1024px) {
+  .vip-3d-stage {
+    height: 262px;
+
+    perspective: 1000px;
+  }
+
+  .vip-3d-card {
+    width: clamp(176px, 28vw, 214px);
+  }
+
+  .vip-3d-card.is-right {
+    transform: translate(-50%, -50%) translateX(56%) translateZ(-60px) rotateY(-27deg) scale(0.82);
+  }
+
+  .vip-3d-card.is-left {
+    transform: translate(-50%, -50%) translateX(-56%) translateZ(-60px) rotateY(27deg) scale(0.82);
+  }
+
+  .vip-3d-card.is-far-right {
+    transform: translate(-50%, -50%) translateX(104%) translateZ(-140px) rotateY(-38deg) scale(0.64);
+  }
+
+  .vip-3d-card.is-far-left {
+    transform: translate(-50%, -50%) translateX(-104%) translateZ(-140px) rotateY(38deg) scale(0.64);
+  }
+}
+
+@media (max-width: 768px) {
+  .vip-banner {
+    padding: 18px 16px 16px;
+
+    margin-bottom: 34px;
+  }
+
+  .vip-banner-title {
+    font-size: 19px;
+  }
+
+  .vip-banner-sub {
+    font-size: 12.5px;
+  }
+
+  .vip-3d-stage {
+    height: 246px;
+
+    perspective: 850px;
+  }
+
+  .vip-3d-card {
+    width: min(70vw, 210px);
+
+    min-height: 194px;
+
+    padding: 14px 14px;
+  }
+
+  .vip-3d-card.is-right {
+    transform: translate(-50%, -50%) translateX(46%) translateZ(-80px) rotateY(-25deg) scale(0.8);
+  }
+
+  .vip-3d-card.is-left {
+    transform: translate(-50%, -50%) translateX(-46%) translateZ(-80px) rotateY(25deg) scale(0.8);
+  }
+
+  .vip-3d-card.is-far-right,
+  .vip-3d-card.is-far-left {
+    opacity: 0.3;
+  }
+
+  .vip-banner-foot {
+    margin-top: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .vip-3d-stage {
+    height: 236px;
+  }
+
+  .vip-3d-card {
+    width: min(78vw, 194px);
+
+    min-height: 184px;
+
+    padding: 13px 13px;
+  }
+
+  .vip-3d-card.is-right {
+    transform: translate(-50%, -50%) translateX(40%) translateZ(-90px) rotateY(-23deg) scale(0.78);
+  }
+
+  .vip-3d-card.is-left {
+    transform: translate(-50%, -50%) translateX(-40%) translateZ(-90px) rotateY(23deg) scale(0.78);
+  }
+
+  .vip-card-name {
+    font-size: 15px;
+  }
+
+  .vip-card-price-value {
+    font-size: 22px;
+  }
+
+  .vip-banner-title {
+    font-size: 18px;
+  }
+}
+
+/* ============================================================
+   HOMEPAGE CATEGORY NAV (below the hero banner)
+   A strip of category links. Icons show at the top of the page and
+   collapse to a names-only compact bar once the hero has scrolled
+   past; at that point the bar pins itself below the navbar.
+
+   NOTE: the app sets `#root { overflow-x: hidden }`, which computes
+   to `overflow-y: auto` and makes #root a scroll container — that
+   disables `position: sticky` for every descendant (including the
+   main navbar). Rather than change a shared/global style, this bar
+   pins with `position: fixed` and reserves its own height through a
+   wrapper, so only .category-nav* is affected.
+   ============================================================ */
+
+.category-nav-slot {
+  position: relative;
+
+  /* Reserves the bar's height in flow (height is written from JS) so
+     the switch to fixed never shifts the page. */
+  margin: 18px 0 40px;
+}
+
+.category-nav {
+  --category-nav-top: 0px;
+  --category-nav-left: 0px;
+  --category-nav-width: 100%;
+
+  position: relative;
+
+  z-index: 90;
+
+  background: #ffffff;
+
+  border: 1px solid var(--border-color);
+
+  border-radius: var(--radius-lg);
+
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+
+  transition: box-shadow 0.3s ease;
+}
+
+/* Pinned below the navbar (scrolled past the hero). The JS keeps the
+   left/width identical to the wrapper box so the pinned bar stays
+   aligned with the hero instead of jumping to full viewport width. */
+.category-nav.is-stuck {
+  position: fixed;
+
+  top: var(--category-nav-top);
+
+  left: var(--category-nav-left);
+
+  width: var(--category-nav-width);
+
+  right: auto;
+
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.12);
+}
+
+.category-nav-track {
+  display: flex;
+
+  align-items: center;
+
+  gap: 4px;
+
+  padding: 10px 12px;
+
+  overflow-x: auto;
+
+  scrollbar-width: none;
+
+  -ms-overflow-style: none;
+
+  -webkit-overflow-scrolling: touch;
+
+  transition: padding 0.3s ease;
+}
+
+.category-nav-track::-webkit-scrollbar {
+  display: none;
+}
+
+.category-nav-item {
+  /* Grow to share leftover width evenly on desktop, never shrink, so
+     long names are never clipped — the track scrolls instead. */
+  flex: 1 0 auto;
+
+  display: flex;
+
+  flex-direction: column;
+
+  align-items: center;
+
+  justify-content: center;
+
+  gap: 6px;
+
+  min-width: 72px;
+
+  padding: 8px 8px;
+
+  border-radius: 12px;
+
+  text-decoration: none;
+
+  color: var(--text-main);
+
+  transition:
+    color 0.2s ease,
+    background-color 0.2s ease,
+    gap 0.3s ease,
+    padding 0.3s ease;
+}
+
+.category-nav-item:hover,
+.category-nav-item:focus-visible {
+  color: var(--primary);
+
+  background: var(--primary-light);
+}
+
+.category-nav-icon {
+  display: flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  width: 44px;
+
+  height: 44px;
+
+  border-radius: 50%;
+
+  background: var(--primary-light);
+
+  color: var(--primary);
+
+  overflow: hidden;
+
+  transition:
+    width 0.3s ease,
+    height 0.3s ease,
+    opacity 0.25s ease;
+}
+
+.category-nav-label {
+  font-size: 12.5px;
+
+  font-weight: 600;
+
+  line-height: 1.2;
+
+  white-space: nowrap;
+}
+
+/* --- Compact (hero scrolled past): icons collapse, names remain --- */
+
+.category-nav.is-compact .category-nav-track {
+  padding: 5px 12px;
+}
+
+.category-nav.is-compact .category-nav-item {
+  gap: 0;
+
+  padding: 7px 8px;
+}
+
+.category-nav.is-compact .category-nav-icon {
+  width: 0;
+
+  height: 0;
+
+  opacity: 0;
+}
+
+@media (max-width: 768px) {
+  .category-nav-item {
+    min-width: 64px;
+
+    padding: 6px 6px;
+  }
+
+  .category-nav-label {
+    font-size: 11.5px;
+  }
+
+  .category-nav-icon {
+    width: 38px;
+
+    height: 38px;
+  }
+}
 
 /* ============================================================
    SHOPPING CART

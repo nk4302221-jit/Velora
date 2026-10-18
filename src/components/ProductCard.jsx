@@ -55,8 +55,7 @@ export const ProductCard = ({ product }) => {
 
   const rating = Number(product.rating || 0);
 
-  const ratingCount =
-    product.rating_count ?? 48;
+  const ratingCount = product.rating_count;
 
   const productImage =
     product.product_image ||
@@ -288,9 +287,11 @@ export const ProductCard = ({ product }) => {
             {rating.toFixed(1)}
           </span>
 
-          <span>
-            ({ratingCount})
-          </span>
+          {typeof ratingCount === 'number' && ratingCount > 0 ? (
+            <span>
+              ({ratingCount})
+            </span>
+          ) : null}
         </div>
 
         {/* ===================================================

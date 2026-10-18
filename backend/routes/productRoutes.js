@@ -6,6 +6,7 @@ import {
   updateProduct,
   deleteProduct,
   getCategories,
+  getBrands,
 } from '../controllers/productController.js';
 import { authenticate } from '../middleware/authMiddleware.js';
 import { authorizeAdmin, authorizePermission } from '../middleware/adminMiddleware.js';
@@ -15,6 +16,7 @@ const router = express.Router();
 
 router.get('/', getProducts);
 router.get('/categories', getCategories);
+router.get('/brands', getBrands);
 router.get('/:id', getProductById);
 
 // =====================================================

@@ -29,6 +29,14 @@ export const CheckoutPage = () => {
   const { user, membership } = useAuth();
   const { showToast } = useToast();
 
+  // totals.discount already includes the VIP/membership discount, so the
+  // regular promotional savings alone is the difference. This keeps the
+  // Promotional Savings and VIP Pass Discount rows from double-counting.
+  const regularDiscount = Math.max(
+    0,
+    (totals.discount || 0) - (totals.membershipDiscount || 0)
+  );
+
   const [addresses, setAddresses] = useState([]);
   const [selectedAddressId, setSelectedAddressId] = useState(null);
 
@@ -36,6 +44,12 @@ export const CheckoutPage = () => {
 
   const [loading, setLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // Coupon input
+  const [couponCode, setCouponCode] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [couponLoading, setCouponLoading] =
+    useState(false);
 
   // Prevent treating Razorpay modal close after successful payment
   // as a failed payment.
@@ -265,6 +279,55 @@ export const CheckoutPage = () => {
   };
 
   // ---------------------------------------------------------
+  // Coupon
+  // ---------------------------------------------------------
+  const handleApplyCoupon = async () => {
+    const code = couponCode.trim();
+
+    if (!code) {
+      showToast('Please enter a coupon code', 'error');
+      return;
+    }
+
+    setCouponLoading(true);
+
+    try {
+      const res = await api.post('/cart/coupon', {
+        code,
+      });
+
+      if (res.data.success) {
+        const data = res.data.data || {};
+
+        setAppliedCoupon({
+          code: data.code,
+          couponDiscount: Number(data.couponDiscount) || 0,
+        });
+
+        showToast(
+          `Coupon "${data.code}" applied successfully!`,
+          'success'
+        );
+      }
+    } catch (err) {
+      setAppliedCoupon(null);
+
+      showToast(
+        err.response?.data?.message ||
+          'Invalid or expired coupon code',
+        'error'
+      );
+    } finally {
+      setCouponLoading(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponCode('');
+  };
+
+  // ---------------------------------------------------------
   // Place order
   // ---------------------------------------------------------
   const handlePlaceOrder = async () => {
@@ -295,6 +358,8 @@ export const CheckoutPage = () => {
           '/payment/create-order',
           {
             addressId: selectedAddressId,
+            couponCode:
+              appliedCoupon?.code || undefined,
           }
         );
 
@@ -541,6 +606,8 @@ export const CheckoutPage = () => {
         {
           addressId: selectedAddressId,
           paymentMethod,
+          couponCode:
+            appliedCoupon?.code || undefined,
         }
       );
 
@@ -1398,8 +1465,11 @@ export const CheckoutPage = () => {
             </span>
           </div>
 
-          {/* Promotional Discount */}
-          {totals.discount > 0 && (
+          {/* Promotional Discount
+              totals.discount already includes the VIP/membership
+              discount, so subtract it to show only the regular
+              promotional savings on this row. */}
+          {regularDiscount > 0 && (
             <div
               className="summary-row"
               style={{
@@ -1411,7 +1481,7 @@ export const CheckoutPage = () => {
               </span>
 
               <span>
-                -{formatINR(totals.discount)}
+                -{formatINR(regularDiscount)}
               </span>
             </div>
           )}
@@ -1447,6 +1517,79 @@ export const CheckoutPage = () => {
               </div>
             )}
 
+          {/* Coupon Code */}
+          {!appliedCoupon ? (
+            <div
+              style={{
+                display: 'flex',
+                gap: '8px',
+                marginBottom: '16px',
+              }}
+              id="checkout-coupon-row"
+            >
+              <input
+                type="text"
+                className="form-control"
+                placeholder="Coupon code"
+                value={couponCode}
+                onChange={(e) =>
+                  setCouponCode(e.target.value)
+                }
+                style={{
+                  flex: 1,
+                  textTransform: 'uppercase',
+                }}
+                id="coupon-code-input"
+              />
+
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={handleApplyCoupon}
+                disabled={couponLoading}
+                id="apply-coupon-btn"
+              >
+                {couponLoading
+                  ? 'Applying...'
+                  : 'Apply'}
+              </button>
+            </div>
+          ) : (
+            <div
+              className="summary-row"
+              style={{
+                color: 'var(--success)',
+                marginBottom: '16px',
+                justifyContent: 'space-between',
+              }}
+              id="applied-coupon-row"
+            >
+              <span>
+                Coupon{' '}
+                <strong>{appliedCoupon.code}</strong>
+              </span>
+
+              <span
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
+                -{formatINR(appliedCoupon.couponDiscount)}
+
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={handleRemoveCoupon}
+                  id="remove-coupon-btn"
+                >
+                  Remove
+                </button>
+              </span>
+            </div>
+          )}
+
           {/* Shipping */}
           <div className="summary-row">
             <span>Shipping</span>
@@ -1458,6 +1601,23 @@ export const CheckoutPage = () => {
             </span>
           </div>
 
+          {/* Coupon Discount */}
+          {appliedCoupon &&
+            appliedCoupon.couponDiscount > 0 && (
+              <div
+                className="summary-row"
+                style={{
+                  color: 'var(--success)',
+                }}
+              >
+                <span>Coupon Discount</span>
+
+                <span>
+                  -{formatINR(appliedCoupon.couponDiscount)}
+                </span>
+              </div>
+            )}
+
           {/* Total */}
           <div className="summary-row total">
             <span>Total Payable</span>
@@ -1468,7 +1628,10 @@ export const CheckoutPage = () => {
                   'var(--primary)',
               }}
             >
-              {formatINR(totals.total)}
+              {formatINR(
+                totals.total -
+                  (appliedCoupon?.couponDiscount || 0)
+              )}
             </span>
           </div>
 
@@ -1497,7 +1660,7 @@ export const CheckoutPage = () => {
               <>
                 <Lock size={18} />
 
-                Pay with Razorpay ({formatINR(totals.total)})
+                Pay with Razorpay ({formatINR(totals.total - (appliedCoupon?.couponDiscount || 0))})
               </>
             ) : (
               'Confirm Order (Cash on Delivery)'

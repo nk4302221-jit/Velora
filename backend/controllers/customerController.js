@@ -23,6 +23,7 @@ const TRACKING_STEPS = [
   { key: 'confirmed', label: 'Confirmed' },
   { key: 'processing', label: 'Processing' },
   { key: 'shipped', label: 'Shipped' },
+  { key: 'out_for_delivery', label: 'Out for Delivery' },
   { key: 'delivered', label: 'Delivered' },
 ];
 
@@ -256,6 +257,13 @@ export async function cancelOrder(req, res) {
       );
     }
 
+    // Stock is only deducted once an order is actually confirmed (COD) or paid
+    // (online). A still-pending order that is cancelled was never deducted, so
+    // restoring it here would invent phantom inventory.
+    const stockWasDeducted =
+      order.payment_status === 'paid' ||
+      ['confirmed', 'processing'].includes(order.order_status);
+
     await executeQuery(
       "UPDATE orders SET order_status = 'cancelled', updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?",
       [orderId, req.user.id]
@@ -269,17 +277,19 @@ export async function cancelOrder(req, res) {
       );
     }
 
-    // Return the reserved stock to inventory.
-    const items = await executeQuery(
-      'SELECT product_id, quantity FROM order_items WHERE order_id = ?',
-      [orderId]
-    );
-
-    for (const item of items) {
-      await executeQuery(
-        'UPDATE products SET stock = stock + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-        [Number(item.quantity || 0), item.product_id]
+    // Return the reserved stock to inventory, but only if it was reserved.
+    if (stockWasDeducted) {
+      const items = await executeQuery(
+        'SELECT product_id, quantity FROM order_items WHERE order_id = ?',
+        [orderId]
       );
+
+      for (const item of items) {
+        await executeQuery(
+          'UPDATE products SET stock = stock + ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+          [Number(item.quantity || 0), item.product_id]
+        );
+      }
     }
 
     const updated = await executeQuery('SELECT * FROM orders WHERE id = ?', [orderId]);

@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { DatabaseSync } from 'node:sqlite';
 import bcrypt from 'bcryptjs';
+import { NAV_CATEGORIES, NAV_PRODUCTS, slugify } from './navCatalogData.js';
 
 let pool = null;
 let sqliteDb = null;
@@ -68,6 +69,8 @@ export async function initDatabase() {
 
       // Seed demo data + apply the same best-effort migrations as SQLite.
       await seedInitialData();
+      await seedNavCatalog();
+      await seedCoupons();
       await migrateSchema();
       await ensureSuperAdmin();
 
@@ -219,6 +222,13 @@ export async function initDatabase() {
       product_image TEXT NOT NULL,
       rating REAL NOT NULL DEFAULT 0.0,
       rating_count INTEGER NOT NULL DEFAULT 0,
+      -- Optional rich merchandising data. All three are nullable so every
+      -- product row written before this feature keeps working unchanged.
+      -- specifications / variants hold JSON objects; images holds a JSON array
+      -- of gallery URLs whose first entry mirrors product_image.
+      specifications TEXT,
+      images TEXT,
+      variants TEXT,
       status TEXT NOT NULL DEFAULT 'active',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -297,6 +307,10 @@ export async function initDatabase() {
       stripe_payment_id TEXT,
       razorpay_order_id TEXT,
       razorpay_payment_id TEXT,
+      -- Snapshot of the coupon redeemed at checkout. coupon_discount is part of
+      -- the order's discount total; the code is kept only for display/audit.
+      coupon_code TEXT DEFAULT NULL,
+      coupon_discount REAL NOT NULL DEFAULT 0.0,
       currency TEXT NOT NULL DEFAULT 'INR',
       paid_at DATETIME DEFAULT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -460,6 +474,8 @@ export async function initDatabase() {
   `);
 
   await seedInitialData();
+  await seedNavCatalog();
+  await seedCoupons();
   await migrateSchema();
   await ensureSuperAdmin();
 }
@@ -590,6 +606,12 @@ function getMySqlSchemaStatements() {
       product_image TEXT NOT NULL,
       rating DECIMAL(3, 2) NOT NULL DEFAULT 0.00,
       rating_count INT NOT NULL DEFAULT 0,
+      -- Optional rich merchandising data (nullable so pre-existing rows are
+      -- untouched): specifications / variants are JSON objects, images is a
+      -- JSON array of gallery URLs whose first entry mirrors product_image.
+      specifications TEXT NULL,
+      images TEXT NULL,
+      variants TEXT NULL,
       status VARCHAR(20) NOT NULL DEFAULT 'active',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -668,6 +690,10 @@ function getMySqlSchemaStatements() {
       stripe_payment_id VARCHAR(255) NULL,
       razorpay_order_id VARCHAR(255) NULL,
       razorpay_payment_id VARCHAR(255) NULL,
+      -- Snapshot of the coupon redeemed at checkout. coupon_discount is part of
+      -- the order's discount total; the code is kept only for display/audit.
+      coupon_code VARCHAR(64) NULL,
+      coupon_discount DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
       currency VARCHAR(10) NOT NULL DEFAULT 'INR',
       paid_at TIMESTAMP NULL DEFAULT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -943,6 +969,122 @@ async function seedInitialData() {
 }
 
 /**
+ * Idempotent seed for the homepage category-navigation catalog.
+ *
+ * The storefront category bar links to 13 departments. This inserts the
+ * matching `categories` rows (keyed by name) and the products that back them
+ * (keyed by name), wiring each product to its resolved category_id and the
+ * denormalized category_name the product API filters on.
+ *
+ * It runs on every boot for BOTH a fresh and an already-populated database.
+ * Because every insert is guarded by an existence check it never creates
+ * duplicates, so it is safe to run any number of times. A failure here is
+ * logged but never prevents the server from starting.
+ */
+export async function seedNavCatalog() {
+  try {
+    // 1) Categories: insert any that are missing, keyed by name.
+    const existingCats = await executeQuery('SELECT id, name FROM categories');
+    const categoryIdByName = new Map(existingCats.map((c) => [c.name, c.id]));
+    let categoriesAdded = 0;
+
+    for (const category of NAV_CATEGORIES) {
+      if (categoryIdByName.has(category.name)) continue;
+
+      const slug = slugify(category.name);
+      const result = await executeQuery(
+        'INSERT INTO categories (name, slug, description, image_url) VALUES (?, ?, ?, ?)',
+        [category.name, slug, category.description || null, category.imageUrl || null]
+      );
+
+      categoryIdByName.set(category.name, result.insertId);
+      categoriesAdded += 1;
+    }
+
+    // 2) Products: insert any that are missing, linked by resolved category id.
+    const existingProducts = await executeQuery('SELECT id, name FROM products');
+    const existingProductNames = new Set(existingProducts.map((p) => p.name));
+    let productsAdded = 0;
+
+    for (const product of NAV_PRODUCTS) {
+      if (existingProductNames.has(product.name)) continue;
+
+      const categoryId = categoryIdByName.get(product.categoryName) ?? null;
+
+      await executeQuery(
+        `INSERT INTO products (name, description, category_id, category_name, brand, price, discount_price, stock, product_image, rating, rating_count, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
+        [
+          product.name,
+          product.description || '',
+          categoryId,
+          product.categoryName,
+          product.brand,
+          Number(product.price),
+          product.discountPrice != null ? Number(product.discountPrice) : null,
+          parseInt(product.stock, 10) || 0,
+          product.image,
+          Number(product.rating) || 0,
+          parseInt(product.ratingCount, 10) || 0,
+        ]
+      );
+
+      existingProductNames.add(product.name);
+      productsAdded += 1;
+    }
+
+    if (categoriesAdded > 0 || productsAdded > 0) {
+      console.log(
+        `[DB] Nav catalog seed: +${categoriesAdded} categories, +${productsAdded} products`
+      );
+    }
+  } catch (err) {
+    console.warn('[DB] Nav catalog seed warning:', err.message);
+  }
+}
+
+/**
+ * Idempotent seed for starter coupons.
+ *
+ * Inserts a handful of demo promotion codes (keyed by their unique code) so the
+ * checkout coupon field has something to validate against out of the box. Like
+ * seedNavCatalog, every insert is guarded by an existence check, so it never
+ * duplicates a code that an administrator has already created or edited. A
+ * failure here is logged but never prevents the server from starting.
+ */
+export async function seedCoupons() {
+  try {
+    const existing = await executeQuery('SELECT code FROM coupons');
+    const existingCodes = new Set(existing.map((c) => String(c.code).toUpperCase()));
+
+    const coupons = [
+      ['WELCOME10', '10% off your first order (max ₹100)', 'percentage', 10, 0, 100, null],
+      ['FLAT50', 'Flat ₹50 off on orders above ₹500', 'fixed', 50, 500, null, null],
+      ['VIP20', '20% VIP discount on orders above ₹1000 (max ₹500)', 'percentage', 20, 1000, 500, null],
+    ];
+
+    let inserted = 0;
+    for (const [code, description, discountType, discountValue, minOrderAmount, maxDiscount, usageLimit] of coupons) {
+      if (existingCodes.has(code)) continue;
+
+      await executeQuery(
+        `INSERT INTO coupons
+           (code, description, discount_type, discount_value, min_order_amount, max_discount, usage_limit, used_count, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 0, 'active')`,
+        [code, description, discountType, discountValue, minOrderAmount, maxDiscount, usageLimit]
+      );
+      inserted += 1;
+    }
+
+    if (inserted > 0) {
+      console.log(`[DB] Coupon seed: +${inserted} coupons`);
+    }
+  } catch (err) {
+    console.warn('[DB] Coupon seed warning:', err.message);
+  }
+}
+
+/**
  * Guarantees the platform always has at least one SUPER_ADMIN account.
  *
  * Databases created before the 3-role model only ever had `admin` rows, so a
@@ -1071,7 +1213,20 @@ async function migrateSchema() {
       if (!names.includes('razorpay_payment_id')) sqliteAdditions.push("ALTER TABLE orders ADD COLUMN razorpay_payment_id TEXT DEFAULT NULL");
       if (!names.includes('currency')) sqliteAdditions.push("ALTER TABLE orders ADD COLUMN currency TEXT NOT NULL DEFAULT 'INR'");
       if (!names.includes('paid_at')) sqliteAdditions.push('ALTER TABLE orders ADD COLUMN paid_at DATETIME DEFAULT NULL');
+      if (!names.includes('coupon_code')) sqliteAdditions.push('ALTER TABLE orders ADD COLUMN coupon_code TEXT DEFAULT NULL');
+      if (!names.includes('coupon_discount')) sqliteAdditions.push('ALTER TABLE orders ADD COLUMN coupon_discount REAL NOT NULL DEFAULT 0.0');
       for (const stmt of sqliteAdditions) {
+        await executeQuery(stmt);
+        console.log(`[DB] Migration: applied -> ${stmt}`);
+      }
+
+      // Optional rich product merchandising columns (specs / gallery / variants).
+      const productCols = (await executeQuery('PRAGMA table_info(products)')).map((c) => c.name);
+      const productAdditions = [];
+      if (!productCols.includes('specifications')) productAdditions.push('ALTER TABLE products ADD COLUMN specifications TEXT');
+      if (!productCols.includes('images')) productAdditions.push('ALTER TABLE products ADD COLUMN images TEXT');
+      if (!productCols.includes('variants')) productAdditions.push('ALTER TABLE products ADD COLUMN variants TEXT');
+      for (const stmt of productAdditions) {
         await executeQuery(stmt);
         console.log(`[DB] Migration: applied -> ${stmt}`);
       }
@@ -1114,6 +1269,8 @@ async function migrateSchema() {
       ['razorpay_payment_id', 'VARCHAR(255) DEFAULT NULL'],
       ['currency', "VARCHAR(10) NOT NULL DEFAULT 'INR'"],
       ['paid_at', 'TIMESTAMP NULL DEFAULT NULL'],
+      ['coupon_code', 'VARCHAR(64) NULL DEFAULT NULL'],
+      ['coupon_discount', 'DECIMAL(10, 2) NOT NULL DEFAULT 0.00'],
     ];
     for (const [col, ddl] of mysqlMigrations) {
       try {
@@ -1121,6 +1278,21 @@ async function migrateSchema() {
       } catch {
         await executeQuery(`ALTER TABLE orders ADD COLUMN ${col} ${ddl}`);
         console.log(`[DB] Migration: added orders.${col}`);
+      }
+    }
+
+    // Optional rich product merchandising columns (specs / gallery / variants).
+    const productColumnMigrations = [
+      ['specifications', 'TEXT NULL DEFAULT NULL'],
+      ['images', 'TEXT NULL DEFAULT NULL'],
+      ['variants', 'TEXT NULL DEFAULT NULL'],
+    ];
+    for (const [col, ddl] of productColumnMigrations) {
+      try {
+        await executeQuery(`SELECT ${col} FROM products LIMIT 1`);
+      } catch {
+        await executeQuery(`ALTER TABLE products ADD COLUMN ${col} ${ddl}`);
+        console.log(`[DB] Migration: added products.${col}`);
       }
     }
 

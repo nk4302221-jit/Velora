@@ -1,4 +1,5 @@
 import { executeQuery } from '../config/db.js';
+import { resolveCoupon, redeemCoupon, CouponError } from './couponService.js';
 
 /**
  * Domain error thrown by the order service layer carrying an HTTP status so
@@ -25,9 +26,10 @@ export class OrderServiceError extends Error {
  * @param {number} params.userId
  * @param {number} params.addressId
  * @param {string} [params.paymentMethod]
- * @returns {Promise<{orderId:number, orderNumber:string, totalAmount:number, subtotal:number, discount:number, shipping:number, currency:string, order:Object}>}
+ * @param {string} [params.couponCode]
+ * @returns {Promise<{orderId:number, orderNumber:string, totalAmount:number, subtotal:number, discount:number, couponDiscount:number, shipping:number, currency:string, order:Object}>}
  */
-export async function createPendingOrder({ userId, addressId, paymentMethod = 'razorpay' }) {
+export async function createPendingOrder({ userId, addressId, paymentMethod = 'razorpay', couponCode = null }) {
   const method = ['razorpay', 'cod'].includes(paymentMethod) ? paymentMethod : 'razorpay';
 
   if (!addressId) {
@@ -91,15 +93,44 @@ export async function createPendingOrder({ userId, addressId, paymentMethod = 'r
     shipping = 0.0;
   }
 
-  const discount = Number((regularDiscount + membershipDiscount).toFixed(2));
+  // Optional coupon: applied to the post-membership order value, before
+  // shipping. A rejected coupon aborts order creation so the shopper is never
+  // charged a silently different amount than the one previewed.
+  let couponDiscount = 0;
+  let appliedCoupon = null;
+
+  if (couponCode) {
+    try {
+      const resolved = await resolveCoupon(couponCode, subtotal - regularDiscount - membershipDiscount);
+      couponDiscount = resolved.discount;
+      appliedCoupon = resolved;
+    } catch (err) {
+      if (err instanceof CouponError) {
+        throw new OrderServiceError(err.message, err.status);
+      }
+      throw err;
+    }
+  }
+
+  const discount = Number((regularDiscount + membershipDiscount + couponDiscount).toFixed(2));
   const totalAmount = Number((subtotal - discount + shipping).toFixed(2));
 
   // Create order record in PENDING payment state
   const orderResult = await executeQuery(
     `INSERT INTO orders 
-     (user_id, address_id, subtotal, discount, shipping, total_amount, payment_status, order_status, payment_method, currency)
-     VALUES (?, ?, ?, ?, ?, ?, 'pending', 'pending', ?, 'INR')`,
-    [userId, addressId, subtotal, discount, shipping, totalAmount, method]
+     (user_id, address_id, subtotal, discount, shipping, total_amount, payment_status, order_status, payment_method, currency, coupon_code, coupon_discount)
+     VALUES (?, ?, ?, ?, ?, ?, 'pending', 'pending', ?, 'INR', ?, ?)`,
+    [
+      userId,
+      addressId,
+      subtotal,
+      discount,
+      shipping,
+      totalAmount,
+      method,
+      appliedCoupon ? appliedCoupon.code : null,
+      couponDiscount,
+    ]
   );
 
   const orderId = orderResult.insertId;
@@ -120,12 +151,20 @@ export async function createPendingOrder({ userId, addressId, paymentMethod = 'r
     );
   }
 
+  // Record the redemption only once the order row that carries the coupon
+  // exists, so usage limits always match real orders.
+  if (appliedCoupon) {
+    await redeemCoupon(appliedCoupon.id);
+  }
+
   return {
     orderId,
     orderNumber,
     totalAmount,
     subtotal,
     discount,
+    couponDiscount,
+    couponCode: appliedCoupon ? appliedCoupon.code : null,
     shipping,
     currency: 'INR',
     order: {
@@ -134,6 +173,8 @@ export async function createPendingOrder({ userId, addressId, paymentMethod = 'r
       total_amount: totalAmount,
       payment_method: method,
       currency: 'INR',
+      coupon_code: appliedCoupon ? appliedCoupon.code : null,
+      coupon_discount: couponDiscount,
     },
   };
 }

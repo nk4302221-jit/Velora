@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
+import jQuery from 'jquery';
+import 'owl.carousel/dist/assets/owl.carousel.css';
 import {
   ArrowRight,
   Sparkles,
@@ -14,6 +16,8 @@ import {
 } from 'lucide-react';
 import api from '../api/client';
 import { ProductCard } from '../components/ProductCard';
+import { MembershipCarousel } from '../components/MembershipCarousel';
+import { CategoryNav } from '../components/CategoryNav';
 
 export const HomePage = () => {
   const [featuredProducts, setFeaturedProducts] = useState([]);
@@ -79,6 +83,99 @@ export const HomePage = () => {
     };
   }, []);
 
+  const heroCarouselRef = useRef(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    let $carousel = null;
+
+    window.jQuery = window.$ = jQuery;
+
+    import('owl.carousel')
+      .then(() => {
+        if (cancelled || !heroCarouselRef.current) return;
+
+        $carousel = jQuery(heroCarouselRef.current);
+        $carousel.owlCarousel({
+          loop: true,
+          nav: true,
+          dots: true,
+          autoplay: true,
+          autoplayTimeout: 2000,
+          autoplaySpeed: 500,
+          autoplayHoverPause: false,
+          responsive: {
+            0: { items: 1 },
+            480: { items: 1 },
+            768: { items: 1 },
+            992: { items: 1 },
+          },
+        });
+      })
+      .catch((err) => {
+        console.error('Failed to initialize Owl Carousel:', err);
+        if (!cancelled && heroCarouselRef.current) {
+          heroCarouselRef.current.classList.add('hero-carousel-fallback');
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      if ($carousel) {
+        $carousel.owlCarousel('destroy');
+        $carousel = null;
+      }
+    };
+  }, []);
+
+  const categoriesCarouselRef = useRef(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    let $carousel = null;
+
+    window.jQuery = window.$ = jQuery;
+
+    import('owl.carousel')
+      .then(() => {
+        if (cancelled || !categoriesCarouselRef.current) return;
+
+        $carousel = jQuery(categoriesCarouselRef.current);
+        $carousel.owlCarousel({
+          loop: true,
+          margin: 16,
+          nav: false,
+          dots: false,
+          autoplay: true,
+          autoplayTimeout: 3000,
+          autoplayHoverPause: true,
+          smartSpeed: 600,
+          mouseDrag: true,
+          touchDrag: true,
+          responsive: {
+            0: { items: 2 },
+            600: { items: 3 },
+            900: { items: 4 },
+            1200: { items: 6 },
+          },
+        });
+      })
+      .catch((err) => {
+        console.error('Failed to initialize categories carousel:', err);
+        if (!cancelled && categoriesCarouselRef.current) {
+          categoriesCarouselRef.current.classList.add('category-carousel-fallback');
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      if ($carousel) {
+        $carousel.owlCarousel('destroy');
+        $carousel = null;
+      }
+    };
+  }, []);
+
   const categories = [
     { name: 'Electronics', icon: Laptop, count: '4 Items', color: '#3b82f6', bg: '#eff6ff' },
     { name: 'Audio & Sound', icon: Headphones, count: '3 Items', color: '#10b981', bg: '#ecfdf5' },
@@ -115,18 +212,49 @@ export const HomePage = () => {
           </div>
 
           <div className="hero-image-wrap">
-            <img
-              src="https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&auto=format&fit=crop&q=80"
-              alt="Premium Headphones"
-              className="hero-img"
-              /* Above the fold and the LCP element: fetch it first and decode
-                 it off the main thread. Never lazy-load it. */
-              fetchPriority="high"
-              decoding="async"
-            />
+            <div className="owl-carousel hero-carousel" ref={heroCarouselRef}>
+              <div className="hero-slide">
+                <img
+                  src="https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&auto=format&fit=crop&q=80"
+                  alt="Premium Headphones"
+                  className="hero-img"
+                  /* Above the fold and the LCP element: fetch it first and decode
+                     it off the main thread. Never lazy-load it. */
+                  fetchPriority="high"
+                  decoding="async"
+                />
+              </div>
+              <div className="hero-slide">
+                <img
+                  src="/assets/hero-headphones.svg"
+                  alt="Premium wireless over-ear headphones"
+                  className="hero-img"
+                  decoding="async"
+                />
+              </div>
+              <div className="hero-slide">
+                <img
+                  src="/assets/hero-camera.svg"
+                  alt="Professional mirrorless camera"
+                  className="hero-img"
+                  decoding="async"
+                />
+              </div>
+              <div className="hero-slide">
+                <img
+                  src="/assets/hero-smartwatch.svg"
+                  alt="Smartwatch with health and fitness tracking"
+                  className="hero-img"
+                  decoding="async"
+                />
+              </div>
+            </div>
           </div>
         </div>
       </section>
+
+      {/* Category navigation bar — sits directly below the hero */}
+      <CategoryNav />
 
       {/* Categories Horizontal Browser */}
       <section style={{ marginBottom: '48px' }} id="categories-section">
@@ -140,7 +268,7 @@ export const HomePage = () => {
           </Link>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
+        <div className="owl-carousel category-carousel" ref={categoriesCarouselRef}>
           {categories.map((cat, idx) => {
             const Icon = cat.icon;
             return (
@@ -207,45 +335,24 @@ export const HomePage = () => {
         )}
       </section>
 
-      {/* Membership Callout Promotional Banner */}
-      <section
-        style={{
-          background: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)',
-          borderRadius: 'var(--radius-lg)',
-          padding: '36px',
-          color: '#ffffff',
-          marginBottom: '56px',
-          boxShadow: 'var(--shadow-lg)',
-        }}
-        id="membership-promo-banner"
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '24px' }}>
-          <div>
-            <span
-              style={{
-                background: 'rgba(255,255,255,0.2)',
-                padding: '4px 12px',
-                borderRadius: 'var(--radius-full)',
-                fontSize: '12px',
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                marginBottom: '12px',
-              }}
-            >
-              <Crown size={14} color="#fef08a" /> Timed VIP Membership Passes
-            </span>
-            <h2 style={{ fontSize: '28px', color: '#ffffff', marginBottom: '8px' }}>
-              Save Up to 12% on Every Order + Free Shipping
-            </h2>
-            <p style={{ color: '#e0f2fe', fontSize: '15px', maxWidth: '600px' }}>
-              Activate a 1-hour Free Trial, 6-hour Silver Pass (₹9.99), or 12-hour Gold VIP Pass (₹19.99).
-              Discounts are automatically deducted at checkout with automated time tracking!
-            </p>
-          </div>
+      {/* Timed VIP Membership Passes — 3D Rotating Carousel */}
+      <section className="vip-banner" id="membership-promo-banner">
+        <div className="vip-banner-head">
+          <span className="vip-banner-badge">
+            <Crown size={14} color="#fef08a" /> Timed VIP Membership Passes
+          </span>
+          <h2 className="vip-banner-title">
+            Save Up to 12% on Every Order + Free Shipping
+          </h2>
+          <p className="vip-banner-sub">
+            Activate a 1-hour Free Trial, 6-hour Silver Pass, or 12-hour Gold VIP Pass.
+            Discounts are automatically deducted at checkout with automated time tracking!
+          </p>
+        </div>
+
+        <MembershipCarousel />
+
+        <div className="vip-banner-foot">
           <Link to="/plans" className="btn btn-accent btn-lg" id="explore-plans-btn">
             View Membership Plans <ArrowRight size={18} />
           </Link>

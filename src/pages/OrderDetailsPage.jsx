@@ -113,6 +113,11 @@ export const OrderDetailsPage = () => {
       icon: Truck,
     },
     {
+      title: 'Out for Delivery',
+      statusKey: 'out_for_delivery',
+      icon: MapPin,
+    },
+    {
       title: 'Delivered',
       statusKey: 'delivered',
       icon: Package,
@@ -126,7 +131,8 @@ export const OrderDetailsPage = () => {
     confirmed: 1,
     processing: 2,
     shipped: 3,
-    delivered: 4,
+    out_for_delivery: 4,
+    delivered: 5,
   };
 
   const isCancelled = order.order_status === 'cancelled';

@@ -42,7 +42,7 @@ async function getCartSignature(userId) {
 export async function createPaymentOrder(req, res) {
   try {
     const userId = req.user.id;
-    const { addressId } = req.body;
+    const { addressId, couponCode } = req.body;
 
     if (!addressId) {
       return errorResponse(res, 'Please select a delivery address for the order', 400);
@@ -64,7 +64,7 @@ export async function createPaymentOrder(req, res) {
     }
 
     if (!internalOrder) {
-      const created = await createPendingOrder({ userId, addressId, paymentMethod: PAYMENT_METHOD });
+      const created = await createPendingOrder({ userId, addressId, paymentMethod: PAYMENT_METHOD, couponCode });
       internalOrder = created.order;
     }
 

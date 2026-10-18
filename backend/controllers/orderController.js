@@ -7,9 +7,9 @@ import { createPendingOrder, OrderServiceError, deductStockForItems } from '../s
 export async function createOrder(req, res) {
   try {
     const userId = req.user.id;
-    const { addressId, paymentMethod } = req.body;
+    const { addressId, paymentMethod, couponCode } = req.body;
 
-    const created = await createPendingOrder({ userId, addressId, paymentMethod });
+    const created = await createPendingOrder({ userId, addressId, paymentMethod, couponCode });
 
     return successResponse(
       res,
@@ -54,6 +54,13 @@ export async function confirmOrderPayment(req, res) {
         'Only Cash on Delivery orders can be confirmed without gateway verification',
         400
       );
+    }
+
+    // Idempotency guard: a COD order is confirmed by moving it out of
+    // 'pending'. Re-confirming (double click, retry, replay) must NOT deduct
+    // stock a second time, so an already-confirmed order is returned as-is.
+    if (order.order_status !== 'pending') {
+      return successResponse(res, 'Order is already confirmed', { order });
     }
 
     // Deduct stock for all order items
