@@ -1,0 +1,32 @@
+desktop-1440x900 /admin/dashboard: no-h-overflow | pageScroll(1317)
+desktop-1440x900 /admin/orders: no-h-overflow | pageScroll(1396) | table(w=1134,min=760px,wrap=fits,cellOverflow=false)
+desktop-1440x900 /admin/products: no-h-overflow | pageScroll(1764) | table(w=1134,min=760px,wrap=fits,cellOverflow=false)
+desktop-1440x900 /admin/customers: no-h-overflow | pageScroll(2165) | table(w=1134,min=760px,wrap=fits,cellOverflow=false)
+desktop-1440x900 /admin/inventory: no-h-overflow | pageScroll(2500) | table(w=1134,min=760px,wrap=fits,cellOverflow=false)
+desktop-1440x900 /admin/reports: no-h-overflow | pageScroll(2061) | nestedH=main.admin-content > div > section.card > div.table-responsive;main.admin-content > div > section.card > div.table-responsive | table(w=760,min=760px,wrap=hscroll,cellOverflow=false)
+desktop-1440x900 /admin/returns: no-h-overflow | pageScroll(921)
+desktop-1440x900 /super-admin/dashboard: no-h-overflow | pageScroll(1225) | nestedH=main.admin-content > div > section.card > div.table-responsive | table(w=760,min=760px,wrap=hscroll,cellOverflow=false)
+desktop-1440x900 /super-admin/admins: no-h-overflow | pageScroll(1173) | table(w=1134,min=760px,wrap=fits,cellOverflow=false)
+desktop-1440x900 /super-admin/roles: no-h-overflow | pageScroll(2995) | table(w=1134,min=760px,wrap=fits,cellOverflow=false)
+desktop-1440x900 /super-admin/audit-logs: no-h-overflow | pageScroll(2369) | table(w=1134,min=760px,wrap=fits,cellOverflow=false)
+desktop-1440x900 /super-admin/payments: no-h-overflow | pageScroll(1627) | table(w=1134,min=760px,wrap=fits,cellOverflow=false)
+desktop-1440x900 /orders: no-h-overflow | pageScroll(1181)
+desktop-1440x900 /profile: no-h-overflow | pageScroll(1441)
+desktop-1440x900 /wishlist: no-h-overflow | pageScroll(1297)
+desktop-1440x900 /customer/orders: no-h-overflow | page-fit
+mobile-390x844 /admin/dashboard: no-h-overflow | pageScroll(2403) | OVERLAP
+mobile-390x844 /admin/orders: no-h-overflow | pageScroll(1644) | nestedH=div#root > div.admin-layout > main.admin-content > div.table-responsive | OVERLAP | table(w=878,min=760px,wrap=hscroll,cellOverflow=false)
+mobile-390x844 /admin/products: no-h-overflow | pageScroll(1934) | nestedH=div#root > div.admin-layout > main.admin-content > div.table-responsive | OVERLAP | table(w=885,min=760px,wrap=hscroll,cellOverflow=true)
+mobile-390x844 /admin/customers: no-h-overflow | pageScroll(2486) | nestedH=div#root > div.admin-layout > main.admin-content > div.table-responsive | OVERLAP | table(w=863,min=760px,wrap=hscroll,cellOverflow=false)
+mobile-390x844 /admin/inventory: no-h-overflow | pageScroll(2800) | nestedH=div#root > div.admin-layout > main.admin-content > div.table-responsive | OVERLAP | table(w=887,min=760px,wrap=hscroll,cellOverflow=true)
+mobile-390x844 /admin/reports: no-h-overflow | pageScroll(3003) | nestedH=main.admin-content > div > section.card > div.table-responsive;main.admin-content > div > section.card > div.table-responsive;div.admin-layout > main.admin-content > section.card > div.table-responsive | OVERLAP | table(w=760,min=760px,wrap=hscroll,cellOverflow=false)
+mobile-390x844 /admin/returns: no-h-overflow | pageScroll(1178) | OVERLAP
+mobile-390x844 /super-admin/dashboard: no-h-overflow | pageScroll(2008) | nestedH=main.admin-content > div > section.card > div.table-responsive | OVERLAP | table(w=760,min=760px,wrap=hscroll,cellOverflow=false)
+mobile-390x844 /super-admin/admins: no-h-overflow | pageScroll(1178) | nestedH=div#root > div.admin-layout > main.admin-content > div.table-responsive | OVERLAP | table(w=760,min=760px,wrap=hscroll,cellOverflow=false)
+mobile-390x844 /super-admin/roles: no-h-overflow | pageScroll(3591) | nestedH=div#root > div.admin-layout > main.admin-content > div.table-responsive;div.admin-layout > main.admin-content > div.card > div.table-responsive | OVERLAP | table(w=760,min=760px,wrap=hscroll,cellOverflow=false)
+mobile-390x844 /super-admin/audit-logs: no-h-overflow | pageScroll(2821) | nestedH=div#root > div.admin-layout > main.admin-content > div.table-responsive | OVERLAP | table(w=760,min=760px,wrap=hscroll,cellOverflow=false)
+mobile-390x844 /super-admin/payments: no-h-overflow | pageScroll(2112) | nestedH=div#root > div.admin-layout > main.admin-content > div.table-responsive | OVERLAP | table(w=924,min=760px,wrap=hscroll,cellOverflow=false)
+mobile-390x844 /orders: no-h-overflow | pageScroll(2188) | nestedH=header#site-header > div.navbar-bottom
+mobile-390x844 /profile: no-h-overflow | pageScroll(2786) | nestedH=header#site-header > div.navbar-bottom
+mobile-390x844 /wishlist: no-h-overflow | pageScroll(2134) | nestedH=header#site-header > div.navbar-bottom
+mobile-390x844 /customer/orders: no-h-overflow | pageScroll(1178) | OVERLAP

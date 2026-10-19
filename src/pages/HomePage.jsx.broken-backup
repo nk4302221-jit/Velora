@@ -1,0 +1,96 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
+import jQuery from 'jquery';
+import 'owl.carousel/dist/assets/owl.carousel.css';
+import {
+  ArrowRight,
+  Sparkles,
+  Crown,
+  TrendingUp,
+  Headphones,
+  Laptop,
+  Watch,
+  Camera,
+  Layers,
+  ChevronRight,
+} from 'lucide-react';
+import api from '../api/client';
+import { ProductCard } from '../components/ProductCard';
+import { MembershipCarousel } from '../components/MembershipCarousel';
+import { CategoryNav } from '../components/CategoryNav';
+
+export const HomePage = () => {
+  const [featuredProducts, setFeaturedProducts] = useState([]);
+  const [popularProducts, setPopularProducts] = useState([]);
+  const [newArrivals, setNewArrivals] = useState([]);
+  const [heroProducts, setHeroProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadHomeProducts() {
+      try {
+        setLoading(true);
+
+        // The three shelves are independent requests. They used to be awaited
+        // one after another, so the last section could not paint until two
+        // extra round trips had finished. Firing them together cuts the
+        // critical path from three sequential requests to one.
+        //
+        // allSettled (not all) keeps the original behaviour: each shelf is
+        // applied from its own successful response, and one failing endpoint
+        // no longer prevents the other two from rendering.
+        const [featuredRes, popularRes, newRes, heroRes] = await Promise.allSettled([
+          api.get('/products?limit=4&sort=rating'),
+          api.get('/products?limit=4&sort=popular'),
+          api.get('/products?limit=4&sort=newest'),
+          // A separate, small catalog request gives the Hero more variety without
+          // changing the number of products shown in the existing home shelves.
+          api.get('/products?limit=12&sort=popular'),
+        ]);
+
+        if (cancelled) return;
+
+        if (featuredRes.status === 'fulfilled' && featuredRes.value.data.success) {
+          setFeaturedProducts(featuredRes.value.data.products);
+        }
+
+        if (popularRes.status === 'fulfilled' && popularRes.value.data.success) {
+          setPopularProducts(popularRes.value.data.products);
+        }
+
+        if (newRes.status === 'fulfilled' && newRes.value.data.success) {
+          setNewArrivals(newRes.value.data.products);
+        }
+
+        if (heroRes.status === 'fulfilled' && heroRes.value.data.success) {
+          setHeroProducts(heroRes.value.data.products);
+        }
+
+        const failed = [featuredRes, popularRes, newRes, heroRes].filter(
+          (r) => r.status === 'rejected'
+        );
+
+        if (failed.length > 0) {
+          console.error('Failed to load some home products:', failed);
+        }
+      } catch (err) {
+        console.error('Failed to load home products:', err);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadHomeProducts();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const categoriesCarouselRef = useRef(null);
+
+  useEffect(() => {

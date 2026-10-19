@@ -1,0 +1,109 @@
+                    background: cat.bg,
+                    color: cat.color,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginBottom: '12px',
+                  }}
+                >
+                  <Icon size={24} />
+                </div>
+                <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '4px' }}>{cat.name}</h3>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{cat.count}</span>
+              </Link>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* Featured Products */}
+      <section style={{ marginBottom: '48px' }} id="featured-products-section">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <div>
+            <h2 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Sparkles size={22} color="var(--primary)" /> Featured Products
+            </h2>
+            <p className="section-subtitle">Handpicked highest-rated items this week</p>
+          </div>
+          <Link to="/products?sort=rating" style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--primary)', fontWeight: 600, fontSize: '14px' }}>
+            View More <ChevronRight size={16} />
+          </Link>
+        </div>
+
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>Loading products...</div>
+        ) : (
+          <div className="products-grid">
+            {featuredProducts.map((p) => (
+              <ProductCard key={p.id} product={p} />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Timed VIP Membership Passes — 3D Rotating Carousel */}
+      <section className="vip-banner" id="membership-promo-banner">
+        <div className="vip-banner-head">
+          <span className="vip-banner-badge">
+            <Crown size={14} color="#fef08a" /> Timed VIP Membership Passes
+          </span>
+          <h2 className="vip-banner-title">
+            Save Up to 12% on Every Order + Free Shipping
+          </h2>
+          <p className="vip-banner-sub">
+            Activate a 1-hour Free Trial, 6-hour Silver Pass, or 12-hour Gold VIP Pass.
+            Discounts are automatically deducted at checkout with automated time tracking!
+          </p>
+        </div>
+
+        <MembershipCarousel />
+
+        <div className="vip-banner-foot">
+          <Link to="/plans" className="btn btn-accent btn-lg" id="explore-plans-btn">
+            View Membership Plans <ArrowRight size={18} />
+          </Link>
+        </div>
+      </section>
+
+      {/* Popular Products */}
+      <section style={{ marginBottom: '48px' }} id="popular-products-section">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <div>
+            <h2 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <TrendingUp size={22} color="var(--accent)" /> Most Popular
+            </h2>
+            <p className="section-subtitle">Customer favorites trending in the community</p>
+          </div>
+          <Link to="/products?sort=popular" style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--primary)', fontWeight: 600, fontSize: '14px' }}>
+            View All <ChevronRight size={16} />
+          </Link>
+        </div>
+
+        <div className="products-grid">
+          {popularProducts.map((p) => (
+            <ProductCard key={p.id} product={p} />
+          ))}
+        </div>
+      </section>
+
+      {/* New Arrivals */}
+      <section style={{ marginBottom: '60px' }} id="new-arrivals-section">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <div>
+            <h2 className="section-title">New Arrivals</h2>
+            <p className="section-subtitle">Just landed in our global warehouse catalog</p>
+          </div>
+          <Link to="/products?sort=newest" style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--primary)', fontWeight: 600, fontSize: '14px' }}>
+            View All <ChevronRight size={16} />
+          </Link>
+        </div>
+
+        <div className="products-grid">
+          {newArrivals.map((p) => (
+            <ProductCard key={p.id} product={p} />
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+};

@@ -1,0 +1,7 @@
+{
+  "customer": "/customer/dashboard",
+  "admin": "/admin/dashboard",
+  "superAdmin": "/super-admin/dashboard",
+  "googleCustomer": "/customer/dashboard",
+  "googleAdmin": "/admin/dashboard"
+}

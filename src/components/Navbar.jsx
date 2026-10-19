@@ -343,47 +343,12 @@ export const Navbar = () => {
                       Sign Up
                     </Link>
                   </div>
-                  <div
-                    className="header-location-inline"
-                    role="button"
-                    tabIndex={0}
-                    title="Add delivery location"
-                    onClick={handleLocationClick}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        handleLocationClick();
-                      }
-                    }}
-                  >
-                    <MapPin size={16} />
-                  </div>
                 </div>
               )}
             </div>
           </div>
         </div>
       </div>
-
-      {/* Location Icon */}
-      {user && (
-        <div
-          className="header-location"
-          id="header-location"
-          role="button"
-          tabIndex={0}
-          title="Add delivery location"
-          onClick={handleLocationClick}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              handleLocationClick();
-            }
-          }}
-        >
-          <MapPin size={16} />
-        </div>
-      )}
 
       {/* Categories Row */}
       <div className="navbar-bottom">

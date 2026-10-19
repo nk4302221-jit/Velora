@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import jQuery from 'jquery';
 import 'owl.carousel/dist/assets/owl.carousel.css';
@@ -18,6 +18,12 @@ import api from '../api/client';
 import { ProductCard } from '../components/ProductCard';
 import { MembershipCarousel } from '../components/MembershipCarousel';
 import { CategoryNav } from '../components/CategoryNav';
+
+const heroFallbackProducts = [
+  { image: '/assets/hero-headphones.svg', name: 'Premium wireless headphones' },
+  { image: '/assets/hero-camera.svg', name: 'Professional mirrorless camera' },
+  { image: '/assets/hero-smartwatch.svg', name: 'Smart fitness watch' },
+];
 
 export const HomePage = () => {
   const [featuredProducts, setFeaturedProducts] = useState([]);
@@ -83,51 +89,6 @@ export const HomePage = () => {
     };
   }, []);
 
-  const heroCarouselRef = useRef(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    let $carousel = null;
-
-    window.jQuery = window.$ = jQuery;
-
-    import('owl.carousel')
-      .then(() => {
-        if (cancelled || !heroCarouselRef.current) return;
-
-        $carousel = jQuery(heroCarouselRef.current);
-        $carousel.owlCarousel({
-          loop: true,
-          nav: true,
-          dots: true,
-          autoplay: true,
-          autoplayTimeout: 2000,
-          autoplaySpeed: 500,
-          autoplayHoverPause: false,
-          responsive: {
-            0: { items: 1 },
-            480: { items: 1 },
-            768: { items: 1 },
-            992: { items: 1 },
-          },
-        });
-      })
-      .catch((err) => {
-        console.error('Failed to initialize Owl Carousel:', err);
-        if (!cancelled && heroCarouselRef.current) {
-          heroCarouselRef.current.classList.add('hero-carousel-fallback');
-        }
-      });
-
-    return () => {
-      cancelled = true;
-      if ($carousel) {
-        $carousel.owlCarousel('destroy');
-        $carousel = null;
-      }
-    };
-  }, []);
-
   const categoriesCarouselRef = useRef(null);
 
   useEffect(() => {
@@ -185,6 +146,20 @@ export const HomePage = () => {
     { name: 'Photography & Optic', icon: Camera, count: '3 Items', color: '#0ea5e9', bg: '#f0f9ff' },
   ];
 
+  const heroProducts = [...featuredProducts, ...popularProducts, ...newArrivals]
+    .map((product) => ({
+      id: product.id,
+      image: product.product_image || product.image_url || product.image || product.thumbnail,
+      name: product.name || 'Velora product',
+    }))
+    .filter((product, index, products) => (
+      product.image && products.findIndex((item) => item.id === product.id) === index
+    ));
+  const heroStripItems = heroProducts.length >= 3
+    ? heroProducts
+    : [...heroProducts, ...heroFallbackProducts];
+  const doubledHeroStripItems = [...heroStripItems, ...heroStripItems];
+
   return (
     <div className="site-wrapper" id="home-page-container">
       {/* Hero Banner */}
@@ -212,48 +187,48 @@ export const HomePage = () => {
           </div>
 
           <div className="hero-image-wrap">
-            <div className="owl-carousel hero-carousel" ref={heroCarouselRef}>
-              <div className="hero-slide">
-                <img
-                  src="https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800&auto=format&fit=crop&q=80"
-                  alt="Premium Headphones"
-                  className="hero-img"
-                  /* Above the fold and the LCP element: fetch it first and decode
-                     it off the main thread. Never lazy-load it. */
-                  fetchPriority="high"
-                  decoding="async"
-                />
-              </div>
-              <div className="hero-slide">
-                <img
-                  src="/assets/hero-headphones.svg"
-                  alt="Premium wireless over-ear headphones"
-                  className="hero-img"
-                  decoding="async"
-                />
-              </div>
-              <div className="hero-slide">
-                <img
-                  src="/assets/hero-camera.svg"
-                  alt="Professional mirrorless camera"
-                  className="hero-img"
-                  decoding="async"
-                />
-              </div>
-              <div className="hero-slide">
-                <img
-                  src="/assets/hero-smartwatch.svg"
-                  alt="Smartwatch with health and fitness tracking"
-                  className="hero-img"
-                  decoding="async"
-                />
-              </div>
+            <div className="hero-product-motion" aria-label="Featured Velora products">
+              {['left', 'right'].map((direction) => (
+                <div className="hero-product-row" key={direction}>
+                  <div className={`hero-product-track hero-track-${direction}`}>
+                    {doubledHeroStripItems.map((product, index) => {
+                      const image = (
+                        <img
+                          src={product.image}
+                          alt={product.name}
+                          loading={index < heroStripItems.length ? 'eager' : 'lazy'}
+                          decoding="async"
+                          onError={(event) => {
+                            event.currentTarget.onerror = null;
+                            event.currentTarget.src = '/placeholder-product.png';
+                          }}
+                        />
+                      );
+
+                      return product.id ? (
+                        <Link
+                          className="hero-product-card"
+                          to={`/products/${product.id}`}
+                          key={`${direction}-${product.id}-${index}`}
+                          aria-label={`View ${product.name}`}
+                        >
+                          {image}
+                        </Link>
+                      ) : (
+                        <div className="hero-product-card" key={`${direction}-${product.name}-${index}`}>
+                          {image}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
       </section>
 
-      {/* Category navigation bar — sits directly below the hero */}
+      {/* Category navigation bar ΓÇö sits directly below the hero */}
       <CategoryNav />
 
       {/* Categories Horizontal Browser */}
@@ -335,7 +310,7 @@ export const HomePage = () => {
         )}
       </section>
 
-      {/* Timed VIP Membership Passes — 3D Rotating Carousel */}
+      {/* Timed VIP Membership Passes ΓÇö 3D Rotating Carousel */}
       <section className="vip-banner" id="membership-promo-banner">
         <div className="vip-banner-head">
           <span className="vip-banner-badge">
