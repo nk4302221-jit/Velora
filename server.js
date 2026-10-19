@@ -1,5 +1,5 @@
-import dotenv from 'dotenv';
 import path from 'path';
+import { loadVeloraEnv } from './backend/config/loadEnv.js';
 
 // The production bundle is CommonJS (dist/server.cjs), where `import.meta.url`
 // is not available - it bundles to an empty object and makes esbuild warn. The
@@ -14,14 +14,21 @@ const entryDir =
 const projectRoot =
   path.basename(entryDir) === 'dist' ? path.dirname(entryDir) : entryDir;
 
-// Load project-root .env FIRST
-const envPath = path.resolve(projectRoot, '.env');
+// =====================================================
+// ENVIRONMENT LOADING
+//
+// This entry (the one `npm run dev` and the production bundle run) used to
+// load ONLY the project-root .env, so anything configured solely in
+// backend/.env - notably RESEND_API_KEY - never reached process.env here and
+// the mail transport silently resolved to a different provider than the same
+// code got under `node backend/server.js`. Both files are now merged by the
+// shared loader, with identical rules on both entry points.
+// =====================================================
 
-dotenv.config({
-  path: envPath,
+loadVeloraEnv({
+  backendEnvPath: path.resolve(projectRoot, 'backend', '.env'),
+  rootEnvPath: path.resolve(projectRoot, '.env'),
 });
-
-console.log(`[Env] Loaded environment from: ${envPath}`);
 
 async function bootstrap() {
   try {

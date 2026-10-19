@@ -17,6 +17,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
+import { useToast } from '../context/ToastContext';
 import { BrandLogo } from './BrandLogo';
 import {
   isAdminRole,
@@ -30,7 +31,16 @@ export const Navbar = () => {
   const { user, membership, logout } = useAuth();
   const { cartCount } = useCart();
   const { wishlistCount } = useWishlist();
+  const { showToast } = useToast();
   const navigate = useNavigate();
+
+  const handleLocationClick = () => {
+    if (!user) {
+      showToast('Please login first to add your delivery location.', 'info');
+      return;
+    }
+    navigate('/profile/addresses');
+  };
 
   const [searchQuery, setSearchQuery] = useState('');
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
@@ -324,19 +334,56 @@ export const Navbar = () => {
                   )}
                 </div>
               ) : (
-                <div className="nav-auth-actions">
-                  <Link to="/login" className="btn btn-secondary btn-sm" id="nav-login-btn">
-                    Sign In
-                  </Link>
-                  <Link to="/register" className="btn btn-primary btn-sm" id="nav-register-btn">
-                    Sign Up
-                  </Link>
+                <div className="nav-auth-wrapper">
+                  <div className="nav-auth-actions">
+                    <Link to="/login" className="btn btn-secondary btn-sm" id="nav-login-btn">
+                      Sign In
+                    </Link>
+                    <Link to="/register" className="btn btn-primary btn-sm" id="nav-register-btn">
+                      Sign Up
+                    </Link>
+                  </div>
+                  <div
+                    className="header-location-inline"
+                    role="button"
+                    tabIndex={0}
+                    title="Add delivery location"
+                    onClick={handleLocationClick}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        handleLocationClick();
+                      }
+                    }}
+                  >
+                    <MapPin size={16} />
+                  </div>
                 </div>
               )}
             </div>
           </div>
         </div>
       </div>
+
+      {/* Location Icon */}
+      {user && (
+        <div
+          className="header-location"
+          id="header-location"
+          role="button"
+          tabIndex={0}
+          title="Add delivery location"
+          onClick={handleLocationClick}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              handleLocationClick();
+            }
+          }}
+        >
+          <MapPin size={16} />
+        </div>
+      )}
 
       {/* Categories Row */}
       <div className="navbar-bottom">

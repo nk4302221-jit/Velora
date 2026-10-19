@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import { executeQuery } from '../config/db.js';
 import { generateToken } from '../utils/jwtHelper.js';
 import { successResponse, errorResponse } from '../utils/responseHelper.js';
-import { sendVerificationEmail, sendPasswordResetEmail } from '../services/emailService.js';
+import { sendVerificationEmail, sendPasswordResetEmail, RESEND_RECIPIENT_NOT_ALLOWED_CODE } from '../services/emailService.js';
 import { recordAudit } from '../utils/auditLog.js';
 import { getEffectivePermissions } from '../utils/adminPermissions.js';
 
@@ -182,6 +182,68 @@ async function issueVerificationOtp(userId, email) {
   return otp;
 }
 
+// =====================================================
+// DUPLICATE REGISTRATION HANDLING
+//
+// Two things can produce a duplicate: the pre-insert
+// SELECT below finds the account, or two concurrent
+// requests race past that SELECT and the INSERT itself
+// violates the UNIQUE index on users.email. Both must
+// produce the SAME 409 so the client never sees a
+// confusing 500 for what is just "already registered".
+// =====================================================
+
+function isDuplicateKeyError(error) {
+  const code = String(error?.code || '');
+
+  return (
+    code === 'ER_DUP_ENTRY' ||
+    code.startsWith('SQLITE_CONSTRAINT') ||
+    Number(error?.errno) === 1062 ||
+    /duplicate|unique constraint/i.test(String(error?.message || ''))
+  );
+}
+
+/**
+ * The single 409 response for "this email is already
+ * registered". An UNVERIFIED existing account is told
+ * to request a new code instead - registration already
+ * failed to deliver a code the first time, so pointing
+ * the user at "Resend Code" (which is rate limited)
+ * completes the flow without creating a second account.
+ */
+async function respondDuplicateRegistration(res, normalizedEmail) {
+  const existing = await executeQuery(
+    'SELECT id, email_verified FROM users WHERE email = ?',
+    [normalizedEmail]
+  );
+
+  const account = existing[0] || null;
+  const alreadyVerified = Boolean(account?.email_verified);
+
+  console.warn('[Auth] Registration rejected: email already registered', {
+    email: normalizedEmail,
+    alreadyVerified,
+  });
+
+  return errorResponse(
+    res,
+    alreadyVerified
+      ? 'An account with this email address already exists. Please sign in instead.'
+      : 'An account with this email address already exists but has not been verified yet. Please request a new verification code instead of registering again.',
+    409,
+    {
+      email: normalizedEmail,
+      existingAccount: true,
+      emailVerified: alreadyVerified,
+      // The verify-email page accepts an email + "Resend Code", which is the
+      // supported path for an account whose original verification email never
+      // arrived (for example while the mail provider rejects the recipient).
+      canResendVerification: !alreadyVerified,
+    }
+  );
+}
+
 export async function register(req, res) {
   try {
     const { fullName, email, password, confirmPassword, phone } = req.body;
@@ -231,7 +293,7 @@ export async function register(req, res) {
 
     const existing = await executeQuery('SELECT id FROM users WHERE email = ?', [normalizedEmail]);
     if (existing.length > 0) {
-      return errorResponse(res, 'An account with this email address already exists', 409);
+      return respondDuplicateRegistration(res, normalizedEmail);
     }
 
     // 3. Hash password
@@ -239,11 +301,24 @@ export async function register(req, res) {
     const passwordHash = await bcrypt.hash(password, salt);
 
     // 4. Create user in MySQL
-    const userInsert = await executeQuery(
-      `INSERT INTO users (full_name, email, password_hash, phone, role, email_verified, status)
-       VALUES (?, ?, ?, ?, 'customer', 0, 'active')`,
-      [fullName.trim(), normalizedEmail, passwordHash, phone ? phone.trim() : null]
-    );
+    // A concurrent registration can pass the SELECT above and lose the race
+    // here; the UNIQUE index is the real guarantee, and this catch turns that
+    // loss into the same 409 the pre-check gives instead of a generic 500.
+    let userInsert;
+
+    try {
+      userInsert = await executeQuery(
+        `INSERT INTO users (full_name, email, password_hash, phone, role, email_verified, status)
+         VALUES (?, ?, ?, ?, 'customer', 0, 'active')`,
+        [fullName.trim(), normalizedEmail, passwordHash, phone ? phone.trim() : null]
+      );
+    } catch (error) {
+      if (isDuplicateKeyError(error)) {
+        return respondDuplicateRegistration(res, normalizedEmail);
+      }
+
+      throw error;
+    }
 
     const userId = userInsert.insertId;
 
@@ -272,11 +347,18 @@ export async function register(req, res) {
       });
     }
 
+    // A testing-mode recipient rejection is a configuration limitation, not a
+    // transient failure, so the user is told exactly why no code arrived and
+    // what would fix it - instead of "try again" in a loop that cannot succeed.
+    const registrationMessage = emailResult.success
+      ? 'Registration successful! Please check your email for your 6-digit verification code before logging in.'
+      : emailResult.errorCode === RESEND_RECIPIENT_NOT_ALLOWED_CODE
+        ? 'Account created, but the verification email cannot be delivered to this address while the email provider is in testing mode. Only an authorized recipient can receive codes until a sending domain is verified. You can request a new code once the address is authorized.'
+        : 'Account created, but the verification email could not be sent. Use "Resend Code" to try again.';
+
     return successResponse(
       res,
-      emailResult.success
-        ? 'Registration successful! Please check your email for your 6-digit verification code before logging in.'
-        : 'Account created, but the verification email could not be sent. Use "Resend Code" to try again.',
+      registrationMessage,
       {
         userId,
         email: normalizedEmail,
@@ -657,6 +739,14 @@ export async function resendVerification(req, res) {
     // account created from that exact address.
     const normalizedEmail = String(email).toLowerCase().trim();
 
+    // A malformed address can never match an account and would only produce a
+    // misleading 404, so it is rejected up front with the same wording
+    // registration uses.
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(normalizedEmail)) {
+      return errorResponse(res, 'Please provide a valid email address', 400);
+    }
+
     const users = await executeQuery('SELECT * FROM users WHERE email = ?', [normalizedEmail]);
     if (users.length === 0) {
       return errorResponse(res, 'No account found with this email', 404);
@@ -708,6 +798,24 @@ export async function resendVerification(req, res) {
         errorCode: emailResult.errorCode,
         reason: emailResult.error,
       });
+
+      // A testing-mode recipient rejection is not a transient outage: retrying
+      // cannot succeed until the recipient is authorized or a domain is
+      // verified. It gets a 422 with the email service's own clear,
+      // user-friendly explanation (never the raw provider message), while
+      // genuine transport failures keep the 502 "try again" contract.
+      if (emailResult.errorCode === RESEND_RECIPIENT_NOT_ALLOWED_CODE) {
+        return errorResponse(
+          res,
+          emailResult.error ||
+            'This recipient is not authorized to receive email while the email provider is in testing mode. Use an authorized recipient or verify a sending domain, then try again.',
+          422,
+          {
+            email: user.email,
+            emailErrorCode: emailResult.errorCode,
+          }
+        );
+      }
 
       // The code was regenerated either way, so a retry issues another fresh
       // one. Report the delivery failure instead of a generic success.

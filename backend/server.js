@@ -1,7 +1,6 @@
-import dotenv from 'dotenv';
-import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { loadVeloraEnv } from './config/loadEnv.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -9,55 +8,16 @@ const __dirname = path.dirname(__filename);
 // =====================================================
 // ENVIRONMENT LOADING
 //
-// Two .env files exist and they used to disagree silently. Only the project-root
-// file was ever loaded, so everything in backend/.env (including any SMTP
-// credentials added there) was dead configuration that never reached
-// process.env — which is exactly how the mail transport ended up unconfigured
-// while looking configured on disk.
-//
-// Both are now loaded. backend/.env is the base layer and the project-root file
-// overrides it, so the documented precedence (root is authoritative) is kept.
-// One deliberate exception: an EMPTY value in the root file does not erase a
-// populated value from backend/.env. Without that rule a placeholder such as
-// `SMTP_USER=` would silently wipe working credentials from the other file and
-// put the mail transport back into its unconfigured state.
+// Shared with the project-root server.js via config/loadEnv.js so both entry
+// points resolve the exact same configuration. See that file for the merge
+// rules (backend/.env is the base layer, the project-root file overrides it,
+// and a blank root value never erases a populated backend value).
 // =====================================================
 
-const rootEnvPath = path.resolve(__dirname, '..', '.env');
-const backendEnvPath = path.resolve(__dirname, '.env');
-
-function readEnvFile(filePath) {
-  if (!fs.existsSync(filePath)) {
-    console.warn(`[Env] No env file at ${filePath} - skipping.`);
-
-    return {};
-  }
-
-  console.log(`[Env] Loaded environment from: ${filePath}`);
-
-  return dotenv.parse(fs.readFileSync(filePath));
-}
-
-const backendEnv = readEnvFile(backendEnvPath);
-const rootEnv = readEnvFile(rootEnvPath);
-
-const mergedEnv = { ...backendEnv };
-
-for (const [key, value] of Object.entries(rootEnv)) {
-  if (value === '' && backendEnv[key]) {
-    console.log(
-      `[Env] ${key} is blank in the project-root .env; keeping the value from backend/.env`
-    );
-
-    continue;
-  }
-
-  mergedEnv[key] = value;
-}
-
-for (const [key, value] of Object.entries(mergedEnv)) {
-  process.env[key] = value;
-}
+loadVeloraEnv({
+  backendEnvPath: path.resolve(__dirname, '.env'),
+  rootEnvPath: path.resolve(__dirname, '..', '.env'),
+});
 
 async function bootstrap() {
   try {

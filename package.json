@@ -9,7 +9,8 @@
     "start": "node dist/server.cjs",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "node scripts/lint.mjs && node scripts/check-undefined-identifiers.mjs"
+    "lint": "node scripts/lint.mjs && node scripts/check-undefined-identifiers.mjs",
+    "test": "npm --prefix backend run test"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

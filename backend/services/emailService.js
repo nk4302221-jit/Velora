@@ -204,8 +204,86 @@ function hasResendConfig() {
 function resolveResendFrom() {
   return (
     process.env.RESEND_FROM ||
+    process.env.EMAIL_FROM ||
     '"Velora" <onboarding@resend.dev>'
   );
+}
+
+/**
+ * =====================================================
+ * RESEND TESTING MODE
+ *
+ * A Resend account that has not verified a sending domain
+ * can only deliver email:
+ *
+ *   1. FROM onboarding@resend.dev
+ *   2. TO the account owner's own email address
+ *
+ * Any other recipient makes the API answer with
+ * "You can only send testing emails to your own email
+ * address." rather than a delivery.
+ *
+ * RESEND_TEST_RECIPIENTS holds the authorized recipient
+ * list (comma separated). When it is set and the From
+ * address still points at resend.dev, recipients outside
+ * the list are rejected BEFORE the API call with a clear,
+ * user-friendly error instead of a raw provider failure.
+ * =====================================================
+ */
+
+const RESEND_TESTING_DOMAIN = 'resend.dev';
+
+export const RESEND_RECIPIENT_NOT_ALLOWED_CODE =
+  'RESEND_RECIPIENT_NOT_ALLOWED';
+
+const RESEND_TESTING_RESTRICTION_MESSAGE =
+  'Email delivery is restricted while the Resend account is in testing mode. ' +
+  'Only an authorized recipient can receive email until a sending domain is ' +
+  'verified at resend.com/domains.';
+
+function extractEmailAddress(value) {
+  const text = String(value || '').trim();
+  const match = text.match(/<([^>]+)>/);
+  return (match ? match[1] : text).trim().toLowerCase();
+}
+
+/**
+ * True when the configured From address still uses the
+ * resend.dev sandbox domain - i.e. no sending domain has
+ * been verified and testing-mode restrictions apply.
+ */
+function isResendTestingFrom(from) {
+  const address = extractEmailAddress(from);
+  const at = address.lastIndexOf('@');
+  if (at <= 0) return false;
+  return address.slice(at + 1) === RESEND_TESTING_DOMAIN;
+}
+
+/**
+ * Authorized recipients for testing mode, lowercased.
+ * Empty array = not configured, in which case no pre-check
+ * runs and the provider's own response is classified instead.
+ */
+export function getResendAuthorizedRecipients() {
+  return String(process.env.RESEND_TEST_RECIPIENTS || '')
+    .split(',')
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function resendNotAllowedError(reason, authorizedRecipients) {
+  const list =
+    authorizedRecipients && authorizedRecipients.length
+      ? ` Authorized testing recipient(s): ${authorizedRecipients.join(', ')}.`
+      : '';
+
+  const error = new Error(
+    `${reason} ${RESEND_TESTING_RESTRICTION_MESSAGE}${list}`
+  );
+
+  error.errorCode = RESEND_RECIPIENT_NOT_ALLOWED_CODE;
+
+  return error;
 }
 
 /**
@@ -233,6 +311,32 @@ async function sendViaResend({
 
   const from =
     resolveResendFrom();
+
+  const authorizedRecipients =
+    getResendAuthorizedRecipients();
+
+  /**
+   * =================================================
+   * TESTING-MODE PRE-CHECK
+   *
+   * Fail fast with a clear message instead of calling
+   * the API only to receive the provider's rejection.
+   * A verified domain (custom RESEND_FROM) skips this
+   * entirely - the restriction does not apply there.
+   * =================================================
+   */
+  if (
+    isResendTestingFrom(from) &&
+    authorizedRecipients.length > 0 &&
+    !authorizedRecipients.includes(
+      extractEmailAddress(to)
+    )
+  ) {
+    throw resendNotAllowedError(
+      `The recipient "${to}" is not authorized to receive email from this account.`,
+      authorizedRecipients
+    );
+  }
 
   const response = await fetch(
     'https://api.resend.com/emails',
@@ -268,7 +372,27 @@ async function sendViaResend({
       data?.error ||
       `Resend API returned HTTP ${response.status}`;
 
-    throw new Error(message);
+    /**
+     * The provider can still reject a recipient even when
+     * the pre-check passed (allowlist not configured, or
+     * out of date). Translate that restriction - and any
+     * invalid-sender failure - into the same clear error
+     * instead of leaking the raw API message.
+     */
+    if (
+      /only send testing emails|verify a domain/i.test(
+        String(message)
+      )
+    ) {
+      throw resendNotAllowedError(
+        `The recipient "${to}" is not authorized to receive email from this account.`,
+        authorizedRecipients
+      );
+    }
+
+    const error = new Error(message);
+    error.errorCode = 'RESEND_SEND_FAILED';
+    throw error;
   }
 
   return data;
@@ -369,6 +493,11 @@ function describeConfig() {
   const resendConfigured =
     hasResendConfig();
 
+  const resendTesting =
+    mode === 'resend'
+      ? isResendTestingFrom(from)
+      : false;
+
   return {
     mode,
 
@@ -405,6 +534,13 @@ function describeConfig() {
           : null,
 
     from,
+
+    testingMode: resendTesting,
+
+    authorizedRecipients:
+      resendTesting
+        ? getResendAuthorizedRecipients()
+        : [],
 
     missing:
       mode === 'smtp'
@@ -571,6 +707,22 @@ export async function logEmailDiagnostics() {
     console.log(
       '[Email] Resend configured successfully - email delivery is ready.'
     );
+
+    if (summary.testingMode) {
+      if (summary.authorizedRecipients.length > 0) {
+        console.log(
+          '[Email] Resend is in TESTING MODE (from is @resend.dev). ' +
+          `Only these recipients can receive email: ${summary.authorizedRecipients.join(', ')}. ` +
+          'Verify a domain at resend.com/domains to deliver to anyone else.'
+        );
+      } else {
+        console.warn(
+          '[Email] Resend is in TESTING MODE (from is @resend.dev) and RESEND_TEST_RECIPIENTS is not set. ' +
+          'The provider only delivers to the account owner\'s own address; set RESEND_TEST_RECIPIENTS so ' +
+          'unauthorized recipients get a clear error instead of a raw API failure.'
+        );
+      }
+    }
 
     return summary;
   }
@@ -831,14 +983,24 @@ async function deliver({
       };
     } catch (error) {
       console.error(
-        `[Email] Failed to send ${purpose} email via Resend: ${error.message}`
+        `[Email] Failed to send ${purpose} email via Resend: ${error.message}`,
+        {
+          to,
+          errorCode:
+            error?.errorCode ||
+            'RESEND_SEND_FAILED',
+        }
       );
 
       return {
         success: false,
         delivery: 'resend',
         previewUrl: null,
-        errorCode: 'RESEND_SEND_FAILED',
+        // A testing-mode recipient rejection gets its own code so the API can
+        // answer with a clear 4xx instead of a generic 502 upstream failure.
+        errorCode:
+          error?.errorCode ||
+          'RESEND_SEND_FAILED',
         error: error.message,
         missingConfig: [],
       };
