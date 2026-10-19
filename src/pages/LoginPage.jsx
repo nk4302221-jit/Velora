@@ -66,12 +66,14 @@ export const LoginPage = () => {
   };
 
   const redirectByRole = (role) => {
-    const target = roleHomePath(role);
+    const normalized = normalizeRole(role);
+    // Customer should go to home page after login
+    const target = normalized === 'customer' ? '/' : roleHomePath(role);
 
-    console.log('[Auth] redirectByRole', { role, target });
+    console.log('[Auth] redirectByRole', { role: normalized, target });
 
     // An unknown / blank role must never receive a privileged landing page.
-    if (!target) {
+    if (!target && normalized !== 'customer') {
       showToast(
         'Your account role could not be verified.',
         'error'
@@ -80,7 +82,7 @@ export const LoginPage = () => {
       return false;
     }
 
-    navigate(target, {
+    navigate(target || '/', {
       replace: true,
     });
 
