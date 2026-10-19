@@ -232,3 +232,33 @@
 }
 
 
+
+/* Portal scroll fix: independent sidebar and content scrolling */
+@media (min-width: 769px) {
+  .admin-layout {
+    height: 100vh;
+    min-height: 0;
+    overflow: hidden;
+    align-items: stretch;
+  }
+
+  .admin-sidebar {
+    height: 100vh;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior-y: contain;
+  }
+
+  .admin-sidebar-inner {
+    min-height: calc(100vh - 48px);
+  }
+
+  .admin-content {
+    height: 100vh;
+    min-height: 0;
+    overflow-x: auto;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+  }
+}
