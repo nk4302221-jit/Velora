@@ -262,3 +262,41 @@
     overscroll-behavior-y: contain;
   }
 }
+
+/* Mobile Admin Sidebar positioning fix */
+@media (max-width: 768px) {
+  .admin-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    transform: none;
+  }
+
+  .admin-sidebar {
+    position: relative;
+    left: auto;
+    right: auto;
+    top: auto;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    transform: none;
+    margin: 0;
+  }
+
+  .admin-sidebar-inner {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .admin-content {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+}
